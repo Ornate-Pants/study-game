@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>State Quest</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<!--
+  STATE QUEST - a states and capitals study game
+
+  Scott: open this file by double-clicking it. There is no
+  server, no install, no internet needed.
+
+  Why every script below is a plain <script src="..."> tag:
+  when a page is opened straight from a folder (file://),
+  Chrome refuses to let a page fetch() its own data files, and
+  it refuses modern "modules" too. Plain script tags still
+  work, so the data files are JavaScript instead of JSON.
+  Do not change these to type="module" - the game will stop
+  working when opened from a folder.
+
+  The load order matters: data first, then helpers, then
+  main.js last, because main.js uses everything above it.
+-->
+
+<link rel="stylesheet" href="css/style.css">
+</head>
+
+<body>
+
+<!-- Small badge that only appears with ?debug=1 in the address -->
+<div id="debug-badge" class="debug-badge" hidden>DEBUG MODE</div>
+
+<!-- Corner buttons that sit above every screen -->
+<button type="button" id="back-button" class="corner-button back-button" hidden>&#8592; Back</button>
+<button type="button" id="mute-button" class="corner-button mute-button" aria-label="Turn sound off">&#128266;</button>
+
+<main class="app">
+
+  <!-- ========== TITLE ========== -->
+  <section class="screen" id="screen-title">
+    <h1 class="title-big">State Quest</h1>
+    <p class="lead">Learn the states. Earn time. Then run and grab coins!</p>
+    <button type="button" id="start-button" class="big-button">Start</button>
+
+    <!-- Testing helper. Only ever shown with ?debug=1. Jumps straight
+         into the running game so it can be tried without a quiz first. -->
+    <p>
+      <button type="button" id="test-runner-button" class="small-button" hidden>
+        Test Bonus Round (60s)
+      </button>
+    </p>
+  </section>
+
+  <!-- ========== MODE SELECT ========== -->
+  <section class="screen" id="screen-mode-select">
+    <h2>Pick a Game</h2>
+    <p class="lead">Which way do you want to play?</p>
+    <!-- main.js fills this in from the MODES list -->
+    <div id="mode-list" class="mode-list"></div>
+  </section>
+
+  <!-- ========== REGION SELECT ========== -->
+  <section class="screen" id="screen-region-select">
+    <h2>Pick Your Regions</h2>
+    <p class="lead">Check the boxes for the parts you want to practice. Pick as many as you like.</p>
+
+    <div class="region-actions">
+      <button type="button" id="pick-all-button" class="small-button">Pick All</button>
+      <button type="button" id="clear-regions-button" class="small-button">Clear</button>
+    </div>
+
+    <!-- main.js fills this in from the region list in data/states.js -->
+    <div id="region-list" class="region-list"></div>
+
+    <!-- The live map preview. js/map.js drops the map in here. -->
+    <div id="region-map-preview" class="map-frame"></div>
+
+    <p id="region-summary" class="region-summary"></p>
+
+    <button type="button" id="start-quiz-button" class="big-button" disabled>Start Round</button>
+  </section>
+
+  <!-- ========== QUIZ ==========
+       js/quiz.js fills in the question and the answer buttons.
+       Phase 3 adds the typing box to this same screen. -->
+  <section class="screen" id="screen-quiz">
+    <div class="hud">
+      <span class="hud-item">Points: <strong id="hud-points">0</strong></span>
+
+      <!-- Backspaces left on this question. Spelling modes only;
+           js/quiz.js fills it in and hides it for the other modes. -->
+      <span class="hud-item hud-backspaces" id="hud-backspaces" hidden></span>
+
+      <span class="hud-item">Question <strong id="hud-progress">0 of 0</strong></span>
+    </div>
+
+    <h2 id="quiz-prompt">Which state is lit up?</h2>
+
+    <!-- The map moves here while a round is being played. -->
+    <div id="quiz-map" class="map-frame"></div>
+
+    <!-- The four answer buttons go in here (Modes 1, 4, 7). -->
+    <div id="quiz-choices" class="choice-list"></div>
+
+    <!-- The spelling area (Modes 2, 3). The letter boxes go in
+         quiz-letters; the tooltip pops up above them. -->
+    <div id="quiz-typing" class="typing-area" hidden>
+      <p id="quiz-tooltip" class="typing-tooltip" hidden></p>
+      <div id="quiz-letters" class="letter-row"></div>
+      <p id="quiz-typing-hint" class="typing-hint">&nbsp;</p>
+      <button type="button" id="quiz-skip" class="small-button skip-button" hidden>
+        Skip this one
+      </button>
+    </div>
+
+    <!-- Messages like "The answer is Vermont." This box keeps its
+         height even when empty so nothing jumps around on screen. -->
+    <p id="quiz-feedback" class="quiz-feedback">&nbsp;</p>
+
+    <!-- Testing helpers. Only ever shown with ?debug=1 in the address. -->
+    <p id="quiz-debug-answer" class="debug-answer" hidden></p>
+    <button type="button" id="end-round-button" class="small-button" hidden>
+      End round now (debug)
+    </button>
+  </section>
+
+  <!-- ========== ROUND SUMMARY ========== -->
+  <section class="screen" id="screen-summary">
+    <h2>Nice Work!</h2>
+    <p class="lead">
+      You earned <strong id="summary-points">0</strong> points.
+    </p>
+    <p class="lead">
+      You got <strong id="summary-firsttry">0 of 0</strong> right on the first try.
+    </p>
+    <p class="lead">
+      That is <strong id="summary-seconds">0</strong> seconds of running time!
+    </p>
+    <p class="lead">Now go grab some coins!</p>
+    <button type="button" id="start-runner-button" class="big-button">Start Bonus Round!</button>
+  </section>
+
+  <!-- ========== BONUS RUNNER ==========
+       js/runner.js drops the Phaser game into the box below. -->
+  <section class="screen" id="screen-runner">
+    <h2 class="runner-title">Bonus Round</h2>
+    <p class="lead runner-howto">
+      Press Space to jump. Grab the coins! Watch out for the holes and the cactus.
+    </p>
+
+    <div id="runner-container" class="runner-frame"></div>
+
+    <!-- Testing helper. Only ever shown with ?debug=1. -->
+    <button type="button" id="finish-runner-button" class="small-button" hidden>
+      End bonus round now (debug)
+    </button>
+  </section>
+
+  <!-- ========== RESULTS ========== -->
+  <section class="screen" id="screen-results">
+    <h2>Your Score</h2>
+
+    <table class="score-table">
+      <tbody>
+        <tr><td>Quiz points</td><td id="results-quiz">0</td></tr>
+        <tr><td>Coin points</td><td id="results-coins">0</td></tr>
+        <tr><td>Region bonus</td><td id="results-bonus">0</td></tr>
+        <tr class="score-total"><td>Total</td><td id="results-total">0</td></tr>
+      </tbody>
+    </table>
+
+    <!-- Only shown when the score makes the top ten. -->
+    <div id="name-entry" class="name-entry" hidden>
+      <p class="name-entry-title">You made the top ten!</p>
+      <label class="name-entry-label" for="name-input">Type your name:</label>
+      <input type="text" id="name-input" class="name-input"
+             maxlength="12" autocomplete="off" spellcheck="false">
+      <p id="name-hint" class="name-hint">3 to 12 letters.</p>
+      <button type="button" id="save-score-button" class="big-button">
+        Save My Score
+      </button>
+    </div>
+
+    <!-- The top ten. main.js fills this in. -->
+    <div id="high-scores" class="high-scores"></div>
+
+    <button type="button" id="play-again-button" class="big-button">Play Again</button>
+
+    <!-- Testing helper. Only ever shown with ?debug=1. -->
+    <p>
+      <button type="button" id="clear-scores-button" class="small-button" hidden>
+        Clear high scores (debug)
+      </button>
+    </p>
+  </section>
+
+</main>
+
+<!-- ==========================================================
+     SCRIPTS - order matters, main.js must be last
+     ========================================================== -->
+
+<!-- The game library for the running game. Bundled locally on purpose:
+     no internet is needed to play. -->
+<script src="lib/phaser.min.js"></script>
+
+<!-- Data files. These are JavaScript, not JSON, so they load from file://. -->
+<script src="data/config.js"></script>
+<script src="data/states.js"></script>
+
+<!-- The map picture. Also JavaScript, and for the same reason. -->
+<script src="assets/map/us-states-inline.js"></script>
+
+<!-- The pictures for the running game. Same reason again. -->
+<script src="assets/sprites/sprites-inline.js"></script>
+
+<!-- Helpers -->
+<script src="js/scores.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/map.js"></script>
+
+<!-- Game engines (these define things, they do not start anything) -->
+<script src="js/quiz.js"></script>
+<script src="js/runner.js"></script>
+
+<!-- Starts the app. Must come last: it uses everything above. -->
+<script src="js/main.js"></script>
+
+</body>
+</html>

@@ -1,0 +1,47 @@
+# ============================================================
+# What NOT to save into version history
+# ============================================================
+#
+# Scott: everything the game needs to RUN is committed, including
+# lib/phaser.min.js and the generated assets/*-inline.js files.
+# There is no build step - you can clone this and double-click
+# index.html. That is deliberate.
+#
+# What is excluded is either huge, re-downloadable, or specific
+# to one computer.
+
+# --- Art pack downloads ------------------------------------
+# The Kenney zips are 0.4-1.5 MB each and are only ever inputs to
+# tools/build-assets.py. What the game actually loads -
+# assets/sprites/sprites-inline.js - IS committed, and
+# assets/sprites/README.txt records exactly which pack and which
+# files came out of it. Re-download from kenney.nl if you need to
+# rebuild the art.
+state-quest/tools/*.zip
+
+# --- Google Drive ------------------------------------------
+# This project lives in a Drive folder, which litters it with
+# these. None of them belong in history.
+desktop.ini
+.tmp.drivedownload/
+.tmp.driveupload/
+*.gdoc
+*.gsheet
+
+# --- Editors and tools -------------------------------------
+.claude/settings.local.json
+.vscode/
+.idea/
+*.swp
+*~
+
+# --- Operating system junk ---------------------------------
+Thumbs.db
+ehthumbs.db
+.DS_Store
+
+# --- Python leftovers from tools/ --------------------------
+__pycache__/
+*.py[cod]
+.venv/
+venv/

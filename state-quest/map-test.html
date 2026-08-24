@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Map Test - State Quest</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<!--
+  MAP TEST  --  a tool, not part of the game
+
+  Scott: double-click this file to check the map. Nothing here
+  affects the game; index.html never loads this page.
+
+  It answers three questions:
+    1. Does every state in data/states.js have a shape on the map?
+    2. Does every shape light up, one at a time, correctly?
+    3. Does each region color the right 5 states?
+
+  Use it again any time the map or data/states.js is edited.
+-->
+
+<link rel="stylesheet" href="css/style.css">
+<style>
+  /* A few styles just for this test page. */
+  .test-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: center;
+    margin: 16px 0;
+  }
+
+  .now-showing {
+    font-size: 34px;
+    font-weight: 800;
+    color: var(--blue-dark);
+    min-height: 46px;
+    margin: 8px 0 0;
+  }
+
+  .check-panel {
+    text-align: left;
+    max-width: 640px;
+    margin: 0 auto 8px;
+    background: var(--card);
+    border: 3px solid var(--line);
+    border-radius: var(--radius);
+    padding: 16px 22px;
+    font-size: 18px;
+  }
+
+  .check-line { margin: 6px 0; }
+  .check-pass { color: var(--green); font-weight: 700; }
+  .check-fail { color: var(--red);   font-weight: 700; }
+
+  .region-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 8px;
+    max-width: 820px;
+    margin: 0 auto;
+  }
+
+  .region-test-button {
+    font: inherit;
+    font-size: 17px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--card);
+    border: 3px solid var(--line);
+    border-radius: 10px;
+    padding: 10px 14px;
+    cursor: pointer;
+    text-align: left;
+    color: var(--ink);
+  }
+
+  .region-test-button:hover { border-color: var(--blue); }
+</style>
+</head>
+
+<body>
+
+<main class="app">
+
+  <h1 style="font-size:40px;">Map Test</h1>
+  <p class="lead">A tool for checking the map. This is not the game.</p>
+
+  <!-- Question 1: does the data match the map? -->
+  <div class="check-panel" id="check-panel"></div>
+
+  <!-- Question 2: does every state light up? -->
+  <div class="test-bar">
+    <button type="button" id="cycle-button" class="big-button">Cycle all 50</button>
+    <button type="button" id="stop-button" class="small-button">Stop</button>
+    <button type="button" id="clear-button" class="small-button">Clear map</button>
+  </div>
+
+  <p class="now-showing" id="now-showing">&nbsp;</p>
+
+  <div class="map-frame" id="map-here"></div>
+
+  <!-- Question 3: does each region color the right states? -->
+  <h2 style="font-size:28px;">Regions</h2>
+  <p class="lead">Click a region. Its 5 states should color in.</p>
+  <div class="region-grid" id="region-grid"></div>
+
+</main>
+
+<!-- Same load order as index.html. Phaser is not needed here. -->
+<script src="data/config.js"></script>
+<script src="data/states.js"></script>
+<script src="assets/map/us-states-inline.js"></script>
+<script src="js/map.js"></script>
+
+<script>
+/* ============================================================
+   THE TESTS
+   ============================================================ */
+
+// Put the map on the page.
+USMap.mountInto(document.getElementById("map-here"));
+
+/* ---- Question 1: data and map agree ---------------------- */
+
+function runChecks() {
+  const panel = document.getElementById("check-panel");
+  const onMap = USMap.getAbbrs();          // the 50 the map knows, no DC
+  const results = [];
+
+  // Every state in the data has a shape on the map.
+  const missing = QUIZ_DATA.items
+    .filter(function (item) { return !USMap.getShape(item.abbr); })
+    .map(function (item) { return item.name + " (" + item.abbr + ")"; });
+
+  results.push({
+    ok: missing.length === 0,
+    good: "Every state in states.js has a shape on the map.",
+    bad: "MISSING from the map: " + missing.join(", ")
+  });
+
+  // Every shape on the map is a state in the data.
+  const known = QUIZ_DATA.items.map(function (item) { return item.abbr; });
+  const extra = onMap.filter(function (abbr) {
+    return known.indexOf(abbr) === -1;
+  });
+
+  results.push({
+    ok: extra.length === 0,
+    good: "Every shape on the map is a state in states.js."
+        + " (Washington DC is drawn but is correctly not counted.)",
+    bad: "On the map but NOT in states.js: " + extra.join(", ")
+  });
+
+  // There are exactly 50.
+  results.push({
+    ok: onMap.length === 50 && QUIZ_DATA.items.length === 50,
+    good: "Counted 50 states in the data and 50 on the map.",
+    bad: "Count is wrong: " + QUIZ_DATA.items.length + " in the data, "
+       + onMap.length + " on the map."
+  });
+
+  // Every region has 5 states, per the spec.
+  const perRegion = {};
+  QUIZ_DATA.items.forEach(function (item) {
+    perRegion[item.region] = (perRegion[item.region] || 0) + 1;
+  });
+  const oddRegions = Object.keys(perRegion).filter(function (key) {
+    return perRegion[key] !== 5;
+  });
+
+  results.push({
+    ok: oddRegions.length === 0,
+    good: "All 10 regions hold exactly 5 states.",
+    bad: "Regions without 5 states: " + oddRegions.map(function (key) {
+      return QUIZ_DATA.regions[key] + " has " + perRegion[key];
+    }).join(", ")
+  });
+
+  panel.innerHTML = "";
+  results.forEach(function (result) {
+    const line = document.createElement("p");
+    line.className = "check-line";
+    line.innerHTML = result.ok
+      ? '<span class="check-pass">PASS</span> ' + result.good
+      : '<span class="check-fail">FAIL</span> ' + result.bad;
+    panel.appendChild(line);
+  });
+
+  // Also print it, so the results can be copied out of the console.
+  const failures = results.filter(function (r) { return !r.ok; });
+  if (failures.length === 0) {
+    console.log("[map-test] all checks passed.");
+  } else {
+    failures.forEach(function (r) { console.error("[map-test] " + r.bad); });
+  }
+}
+
+/* ---- Question 2: light up all 50, one at a time ---------- */
+
+let cycleTimer = null;
+
+function stopCycle() {
+  if (cycleTimer) {
+    clearInterval(cycleTimer);
+    cycleTimer = null;
+  }
+}
+
+function startCycle() {
+  stopCycle();
+
+  const states = QUIZ_DATA.items;
+  let index = 0;
+  const seen = [];
+
+  showName("");
+
+  cycleTimer = setInterval(function () {
+    if (index >= states.length) {
+      stopCycle();
+      showName("Done - " + seen.length + " states shown");
+      console.log("[map-test] cycled through:", seen.join(" "));
+      return;
+    }
+
+    const state = states[index];
+    USMap.highlight(state.abbr);
+    showName(state.name + "  —  " + state.abbr);
+    seen.push(state.abbr);
+    index++;
+  }, 400);
+}
+
+function showName(text) {
+  document.getElementById("now-showing").textContent = text || " ";
+}
+
+/* ---- Question 3: one region at a time -------------------- */
+
+function buildRegionButtons() {
+  const grid = document.getElementById("region-grid");
+
+  Object.keys(QUIZ_DATA.regions).forEach(function (key) {
+    const regionNumber = parseInt(key, 10);
+
+    const abbrs = QUIZ_DATA.items
+      .filter(function (item) { return item.region === regionNumber; })
+      .map(function (item) { return item.abbr; });
+
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "region-test-button";
+
+    const swatch = document.createElement("span");
+    swatch.className = "region-swatch region-swatch-" + regionNumber;
+    btn.appendChild(swatch);
+
+    const text = document.createElement("span");
+    text.textContent = QUIZ_DATA.regions[key] + " (" + abbrs.join(" ") + ")";
+    btn.appendChild(text);
+
+    btn.addEventListener("click", function () {
+      stopCycle();
+      USMap.clearAll();
+      USMap.setRegionTint(abbrs, regionNumber);
+      showName(QUIZ_DATA.regions[key] + "  —  " + abbrs.join(" "));
+    });
+
+    grid.appendChild(btn);
+  });
+}
+
+/* ---- Wire up the buttons --------------------------------- */
+
+document.getElementById("cycle-button").addEventListener("click", startCycle);
+
+document.getElementById("stop-button").addEventListener("click", function () {
+  stopCycle();
+});
+
+document.getElementById("clear-button").addEventListener("click", function () {
+  stopCycle();
+  USMap.clearAll();
+  showName("");
+});
+
+runChecks();
+buildRegionButtons();
+</script>
+
+</body>
+</html>
