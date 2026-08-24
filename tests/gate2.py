@@ -1,0 +1,312 @@
+"""Drive real Mode 1 rounds in Chrome and check Gate 2 (and that Gate 1 still holds)."""
+from playwright.sync_api import sync_playwright
+from pathlib import Path
+
+# Where the game is, worked out from where THIS file is, so the
+# suite keeps working if the project is moved or cloned somewhere else.
+GAME = Path(__file__).resolve().parent.parent / "state-quest"
+
+# Screenshots and browser profiles go in a scratch folder that git
+# ignores, rather than littering tests/.
+SHOTS = Path(__file__).resolve().parent / "_output"
+SHOTS.mkdir(exist_ok=True)
+URL = GAME.joinpath("index.html").as_uri()
+
+problems = []
+
+
+def play_out_runner(page):
+    """Start the bonus round and end it early.
+
+    Phase 4 turned this screen into a real Phaser game, so it can no
+    longer be clicked straight through: it needs a moment to boot, and
+    it holds a short "Time!" pause before handing back to the results.
+    """
+    page.click("#start-runner-button")
+    page.wait_for_timeout(900)             # let Phaser boot
+    page.click("#finish-runner-button")    # debug button: end it now
+    page.wait_for_timeout(1800)            # the "Time!" pause
+
+
+def results_add_up(page):
+    """(quiz, coins, bonus, total) off the results screen."""
+    grab = lambda i: int(page.locator(i).inner_text())
+    return (grab("#results-quiz"), grab("#results-coins"),
+            grab("#results-bonus"), grab("#results-total"))
+
+
+def check(label, ok, detail=""):
+    print(("PASS  " if ok else "FAIL  ") + label + ("   " + detail if detail else ""))
+    if not ok:
+        problems.append(label + " " + detail)
+
+
+def choices(page):
+    """[(text, disabled, classes), ...] for the four answer buttons."""
+    return page.evaluate("""() => [...document.querySelectorAll('.choice-button')]
+        .map(b => [b.dataset.answer, b.disabled, b.className])""")
+
+
+def answer(page):
+    """The correct answer for the question on screen, read from the engine."""
+    return page.evaluate(
+        "() => { const s = Quiz.getState(); return s.current[s.rules.asks]; }")
+
+
+def lit(page):
+    """Which state is highlighted gold right now."""
+    return page.evaluate("""() => {
+        const el = document.querySelector('.us-map-state.is-highlight');
+        return el ? el.getAttribute('data-abbr') : null;
+    }""")
+
+
+def hud(page):
+    return (int(page.locator("#hud-points").inner_text()),
+            page.locator("#hud-progress").inner_text())
+
+
+def pick(page, text):
+    page.locator(f'.choice-button[data-answer="{text}"]').click()
+
+
+def start_round(page, region_indexes, debug=True):
+    page.goto(URL + ("?debug=1" if debug else ""))
+    page.wait_for_timeout(300)
+    page.click("#start-button")
+    page.click("#mode-list button:first-child")
+    page.wait_for_timeout(200)
+    for i in region_indexes:
+        page.locator("#region-list input").nth(i).check()
+    page.wait_for_timeout(250)
+    page.click("#start-quiz-button")
+    page.wait_for_timeout(300)
+
+
+with sync_playwright() as p:
+    browser = p.chromium.launch(channel="chrome")
+    page = browser.new_page(viewport={"width": 1280, "height": 1000})
+    console = []
+    page.on("console", lambda m: console.append(m.type + ": " + m.text))
+    page.on("pageerror", lambda e: problems.append("pageerror: " + str(e)))
+
+    # ============ 1. A perfect 1-region round ============
+    start_round(page, [0])
+    check("1 region gives 5 questions", hud(page)[1] == "1 of 5", hud(page)[1])
+    check("map is on the quiz screen",
+          page.locator("#quiz-map svg.us-map").count() == 1)
+
+    # the "look here" ring, and the 2x2 button layout
+    ring = page.evaluate("""() => {
+        const r = document.querySelector('.us-map-ring');
+        return r ? [+r.getAttribute('r'), getComputedStyle(r).display] : null;
+    }""")
+    check("a ring points at the state being asked about",
+          ring is not None and ring[1] != "none" and ring[0] >= 26, str(ring))
+
+    rows = page.evaluate("""() => {
+        const tops = [...document.querySelectorAll('.choice-button')]
+            .map(b => Math.round(b.getBoundingClientRect().top));
+        return [...new Set(tops)].length;
+    }""")
+    check("the four answers sit in a 2 x 2 block", rows == 2,
+          str(rows) + " rows")
+
+    seen_order = []
+    for q in range(5):
+        a = answer(page)
+        seen_order.append(a)
+        opts = [c[0] for c in choices(page)]
+
+        check(f"Q{q+1}: four choices, no duplicates",
+              len(opts) == 4 and len(set(opts)) == 4, str(opts))
+        check(f"Q{q+1}: the answer is among the choices", a in opts)
+        check(f"Q{q+1}: the lit state matches the question",
+              lit(page) == page.evaluate("() => Quiz.getState().current.abbr"),
+              str(lit(page)))
+
+        pick(page, a)
+        page.wait_for_timeout(1300)   # feedbackSeconds = 1
+
+    check("perfect 5-question round scores exactly 25",
+          page.locator("#summary-points").inner_text() == "25",
+          page.locator("#summary-points").inner_text())
+    check("summary shows 5 of 5 first try",
+          page.locator("#summary-firsttry").inner_text() == "5 of 5",
+          page.locator("#summary-firsttry").inner_text())
+    check("25 points becomes 25 seconds of running",
+          page.locator("#summary-seconds").inner_text() == "25")
+    check("Back button is hidden once the round is under way",
+          page.locator("#back-button").is_hidden())
+    check("the ring is put away when the round ends",
+          page.evaluate("""() => {
+              const r = document.querySelector('.us-map-ring');
+              return !r || getComputedStyle(r).display === 'none';
+          }"""))
+    check("a tiny state still gets a big enough ring",
+          page.evaluate("""() => {
+              USMap.highlight('RI');
+              const r = document.querySelector('.us-map-ring');
+              return +r.getAttribute('r') >= 26;
+          }"""))
+    page.screenshot(path=str(SHOTS / "g2-summary.png"), full_page=True)
+
+    # results math unchanged from Phase 0
+    play_out_runner(page)
+    quiz, coins, bonus, total = results_add_up(page)
+    check("results math: 25 quiz + coins + 10 region bonus",
+          quiz == 25 and bonus == 10 and total == quiz + coins + bonus,
+          f"{quiz} + {coins} + {bonus} = {total}")
+
+    # ============ 2. Second chance is worth half ============
+    start_round(page, [0])
+    a = answer(page)
+    wrong = [c[0] for c in choices(page) if c[0] != a][0]
+
+    pick(page, wrong)
+    page.wait_for_timeout(400)
+    after = {c[0]: c for c in choices(page)}
+    check("a wrong pick does not change the score", hud(page)[0] == 0, str(hud(page)))
+    check("the wrong button is disabled", after[wrong][1] is True)
+    check("the wrong button is marked red", "is-wrong" in after[wrong][2])
+    check("the other three stay clickable",
+          sum(1 for c in choices(page) if not c[1]) == 3)
+    check("the question has not moved on", hud(page)[1] == "1 of 5", hud(page)[1])
+    page.screenshot(path=str(SHOTS / "g2-first-miss.png"), full_page=True)
+
+    pick(page, a)
+    page.wait_for_timeout(1300)
+    check("right on the second pick is worth 3, not 5",
+          hud(page)[0] == 3, str(hud(page)))
+
+    # ============ 3. Wrong twice = 0, answer revealed, no repeat ============
+    start_round(page, [0])
+    a2 = answer(page)
+    missed_abbr = page.evaluate("() => Quiz.getState().current.abbr")
+    wrongs = [c[0] for c in choices(page) if c[0] != a2]
+
+    pick(page, wrongs[0])
+    page.wait_for_timeout(350)
+    pick(page, wrongs[1])
+    page.wait_for_timeout(500)
+
+    check("wrong twice scores nothing", hud(page)[0] == 0, str(hud(page)))
+
+    # Phase 4B: all three buttons must say what they are - the answer
+    # green, and BOTH wrong picks red. The second one used to stay grey.
+    marks = {c[0]: c[2] for c in choices(page)}
+    check("the second wrong pick turns red too",
+          "is-wrong" in marks[wrongs[1]], marks[wrongs[1]])
+    check("the first wrong pick is still red",
+          "is-wrong" in marks[wrongs[0]], marks[wrongs[0]])
+    check("the right answer is green at the same time",
+          "is-correct" in marks[a2], marks[a2])
+    check("the answer is revealed on screen",
+          a2 in page.locator("#quiz-feedback").inner_text(),
+          page.locator("#quiz-feedback").inner_text())
+    revealed = {c[0]: c for c in choices(page)}
+    check("the right answer is shown in green", "is-correct" in revealed[a2][2])
+    check("no more picking allowed", all(c[1] for c in choices(page)))
+    page.screenshot(path=str(SHOTS / "g2-reveal.png"), full_page=True)
+
+    # Phase 4B: the reveal pause was shortened from 3s to 2s.
+    import time as _t
+    _start = _t.time()
+    while _t.time() - _start < 6:
+        if hud(page)[1] == "2 of 5":
+            break
+        page.wait_for_timeout(50)
+    waited = _t.time() - _start
+    check("it moves on by itself after the reveal",
+          hud(page)[1] == "2 of 5", hud(page)[1])
+    check("the reveal pause is the shortened ~2 seconds, not 3",
+          1.4 < waited < 2.9, str(round(waited, 2)) + "s")
+
+    # finish the round and confirm the missed state never returns
+    rest = []
+    for _ in range(4):
+        rest.append(page.evaluate("() => Quiz.getState().current.abbr"))
+        pick(page, answer(page))
+        page.wait_for_timeout(1300)
+
+    check("a missed question is not asked again",
+          missed_abbr not in rest, missed_abbr + " in " + str(rest))
+    check("4 right out of 5 after one blown question = 20 points",
+          page.locator("#summary-points").inner_text() == "20",
+          page.locator("#summary-points").inner_text())
+    check("summary counts 4 of 5 on the first try",
+          page.locator("#summary-firsttry").inner_text() == "4 of 5",
+          page.locator("#summary-firsttry").inner_text())
+
+    # ============ 4. Two regions ============
+    start_round(page, [0, 9])
+    check("2 regions give 10 questions", hud(page)[1] == "1 of 10", hud(page)[1])
+    for _ in range(10):
+        pick(page, answer(page))
+        page.wait_for_timeout(1300)
+    check("perfect 10-question round scores exactly 50",
+          page.locator("#summary-points").inner_text() == "50",
+          page.locator("#summary-points").inner_text())
+    play_out_runner(page)
+    quiz, coins, bonus, total = results_add_up(page)
+    check("2-region results math: 50 quiz + coins + 20 region bonus",
+          quiz == 50 and bonus == 20 and total == quiz + coins + bonus,
+          f"{quiz} + {coins} + {bonus} = {total}")
+
+    # ============ 5. Keyboard, shuffling, distractor quality ============
+    start_round(page, [0])
+    first_of = [page.evaluate("() => Quiz.getState().current.abbr")]
+    page.keyboard.press("1")
+    page.wait_for_timeout(400)
+    check("number keys pick an answer",
+          hud(page)[0] in (0, 5) and any(
+              c[1] for c in choices(page)), str(choices(page)))
+
+    orders = []
+    for _ in range(6):
+        start_round(page, [0])
+        orders.append(page.evaluate(
+            "() => [Quiz.getState().current, ...Quiz.getState().queue]"
+            ".map(s => s.abbr).join('')"))
+    check("the question order is shuffled between rounds",
+          len(set(orders)) > 1, str(len(set(orders))) + " distinct orders of 6")
+
+    # distractors should come from the same region when one region is in play
+    start_round(page, [0])
+    ne = {"ME", "NH", "VT", "MA", "RI"}
+    names_in_region = page.evaluate(
+        "() => QUIZ_DATA.items.filter(i => i.region === 1).map(i => i.name)")
+    opts = [c[0] for c in choices(page)]
+    check("with 1 region picked, all 4 choices come from that region",
+          all(o in names_in_region for o in opts), str(opts))
+
+    # ============ 6. Gate 1 must still pass ============
+    page2 = browser.new_page(viewport={"width": 1100, "height": 1200})
+    page2.on("pageerror", lambda e: problems.append("map-test pageerror: " + str(e)))
+    page2.goto(GAME.joinpath("map-test.html").as_uri())
+    page2.wait_for_timeout(400)
+    check("Gate 1: map-test still reports no failures",
+          page2.locator(".check-fail").count() == 0)
+
+    page2.goto(URL)
+    page2.wait_for_timeout(250)
+    page2.click("#start-button")
+    page2.click("#mode-list button:first-child")
+    page2.wait_for_timeout(200)
+    page2.locator("#region-list input").nth(0).check()
+    page2.wait_for_timeout(350)
+    tint = page2.evaluate("""() => [...document.querySelectorAll('.us-map [data-abbr]')]
+        .filter(e => getComputedStyle(e).fill !== 'rgb(216, 222, 233)')
+        .map(e => e.getAttribute('data-abbr')).sort()""")
+    check("Gate 1: region tinting still works",
+          tint == ["MA", "ME", "NH", "RI", "VT"], str(tint))
+
+    browser.close()
+
+bad = [c for c in console if c.startswith(("error", "warning"))]
+check("console is clean (no errors or warnings)", not bad, str(bad[:3]))
+
+print("\n=== " + ("GATE 2: ALL CHECKS PASSED" if not problems
+                 else "GATE 2: " + str(len(problems)) + " PROBLEM(S)") + " ===")
+for pr in problems:
+    print("  " + pr)

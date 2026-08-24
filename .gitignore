@@ -19,6 +19,11 @@
 # rebuild the art.
 state-quest/tools/*.zip
 
+# --- Test leftovers ----------------------------------------
+# The gate checks write screenshots and a throwaway browser profile
+# in here. The checks themselves ARE committed; their output is not.
+tests/_output/
+
 # --- Google Drive ------------------------------------------
 # This project lives in a Drive folder, which litters it with
 # these. None of them belong in history.
