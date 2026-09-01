@@ -1,4 +1,5 @@
 """Drive the typed spelling modes in Chrome and check Gate 3."""
+import sys
 from playwright.sync_api import sync_playwright
 from pathlib import Path
 
@@ -364,3 +365,8 @@ print("\n=== " + ("GATE 3: ALL CHECKS PASSED" if not problems
                  else "GATE 3: " + str(len(problems)) + " PROBLEM(S)") + " ===")
 for pr in problems:
     print("  " + pr)
+
+# Leave a failing exit code behind, so run-all.py's summary line for this
+# gate says what actually happened rather than just "it did not crash".
+if problems:
+    sys.exit(1)

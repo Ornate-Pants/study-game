@@ -1,7 +1,7 @@
 """
 Run every gate check, one after another, and print a summary.
 
-    python tests/run-all.py            all five gates
+    python tests/run-all.py            every gate
     python tests/run-all.py 3 4        just gates 3 and 4
 
 Each gate drives a real Chrome browser against the real game, so the
@@ -21,7 +21,8 @@ WHAT_EACH_ONE_COVERS = {
     2: "Mode 1, multiple choice, and the scoring",
     3: "Modes 2 and 3, spelling, and the backspace limit",
     4: "the bonus runner: jumping, hazards, stuns, coins",
-    5: "high scores, sound, artwork, and saving between visits"
+    5: "high scores, sound, artwork, and saving between visits",
+    6: "Mode 9, clicking the state on the map"
 }
 
 

@@ -1,4 +1,5 @@
 """Drive real Mode 1 rounds in Chrome and check Gate 2 (and that Gate 1 still holds)."""
+import sys
 from playwright.sync_api import sync_playwright
 from pathlib import Path
 
@@ -187,6 +188,15 @@ with sync_playwright() as p:
 
     pick(page, wrongs[0])
     page.wait_for_timeout(350)
+
+    # The reveal pause is timed from HERE, the moment the answer is
+    # revealed - not from further down the file. The checks and the
+    # screenshot below take a few hundred milliseconds of their own,
+    # and starting the clock after them measured the pause as shorter
+    # than it is, which is what used to fail this check on a good build.
+    import time as _t
+    revealed_at = _t.time()
+
     pick(page, wrongs[1])
     page.wait_for_timeout(500)
 
@@ -210,13 +220,11 @@ with sync_playwright() as p:
     page.screenshot(path=str(SHOTS / "g2-reveal.png"), full_page=True)
 
     # Phase 4B: the reveal pause was shortened from 3s to 2s.
-    import time as _t
-    _start = _t.time()
-    while _t.time() - _start < 6:
+    while _t.time() - revealed_at < 6:
         if hud(page)[1] == "2 of 5":
             break
         page.wait_for_timeout(50)
-    waited = _t.time() - _start
+    waited = _t.time() - revealed_at
     check("it moves on by itself after the reveal",
           hud(page)[1] == "2 of 5", hud(page)[1])
     check("the reveal pause is the shortened ~2 seconds, not 3",
@@ -310,3 +318,8 @@ print("\n=== " + ("GATE 2: ALL CHECKS PASSED" if not problems
                  else "GATE 2: " + str(len(problems)) + " PROBLEM(S)") + " ===")
 for pr in problems:
     print("  " + pr)
+
+# Leave a failing exit code behind, so run-all.py's summary line for this
+# gate says what actually happened rather than just "it did not crash".
+if problems:
+    sys.exit(1)

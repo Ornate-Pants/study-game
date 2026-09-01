@@ -1,4 +1,5 @@
 """Drive the Phaser bonus round in Chrome and check Gate 4."""
+import sys
 from playwright.sync_api import sync_playwright
 from pathlib import Path
 import time
@@ -429,3 +430,8 @@ print("\n=== " + ("GATE 4: ALL CHECKS PASSED" if not problems
                  else "GATE 4: " + str(len(problems)) + " PROBLEM(S)") + " ===")
 for pr in problems:
     print("  " + pr)
+
+# Leave a failing exit code behind, so run-all.py's summary line for this
+# gate says what actually happened rather than just "it did not crash".
+if problems:
+    sys.exit(1)

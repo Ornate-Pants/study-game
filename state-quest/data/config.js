@@ -12,6 +12,10 @@
 
 const CONFIG = {
 
+  APP_VERSION: "1.1",        // Which build of the game this is. It is written down
+                             // HERE and nowhere else - the title screen reads it
+                             // from this line, so bumping it here bumps it there.
+
   // --- Quiz scoring -----------------------------------------
 
   basePoints: 5,             // Points for getting an answer right on the first try.
@@ -49,6 +53,13 @@ const CONFIG = {
                              // next question appears. Bigger = slower and calmer.
 
   tooltipSeconds: 4,         // How long the "remember to capitalize" reminder stays up.
+
+  zoomSmallStates: true,     // In the click-the-map games, show a second bigger map
+                             // beside the first, holding the crowded north-eastern
+                             // states: Rhode Island, Maryland, Delaware, Connecticut,
+                             // Massachusetts and New Jersey. They are too small to
+                             // click comfortably on the full map. Set to false to
+                             // play without it.
 
   // --- Bonus round (the running game) -----------------------
 

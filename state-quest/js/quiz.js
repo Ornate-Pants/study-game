@@ -36,9 +36,12 @@
    scoring, the queue and the second-chance rules do not
    change at all.
 
+   THREE WAYS TO ANSWER, one engine behind all of them:
+     "choices"   Mode 1        pick one of four buttons
+     "typing"    Modes 2, 3    spell it out letter by letter
+     "mapClick"  Mode 9        click the state on the map
+
    Still to come:
-     Phase 3  Modes 2 and 3 (typed answers, dashes, tooltips)
-     Phase 6  Mode 9 (click the state on the map)
      Phase 7  Modes 4-8 and 10 (capitals and abbreviations)
    ============================================================ */
 
@@ -71,9 +74,17 @@ const Quiz = (function () {
       showFirstLetter: false,   // no head start
       showDashes: false,        // and no clue how long the word is
       prompt: "Spell the state that is lit up. No hints this time!"
+    },
+    9: {
+      asks: "name",
+      answerWith: "mapClick",
+      // The map is the ANSWER SHEET in this mode, so it must not light
+      // anything up. The question is read instead, in big letters.
+      showsTargetText: true,
+      prompt: "Find this state on the map."
     }
-    // Phase 6 adds:  9        -> answerWith: "mapClick"
-    // Phase 7 adds:  4 to 8 and 10
+    // Phase 7 adds:  4 to 8, and 10 (the same mapClick as above, but
+    //                asking for "capital" instead of "name")
   };
 
   // Shown when a letter is right but typed in lowercase where a
@@ -100,7 +111,10 @@ const Quiz = (function () {
     answers: [],       // every spelling that counts as correct
     typed: "",         // the letters accepted so far
     pendingWrong: "",  // a wrong letter sitting there waiting to be backspaced
-    backspacesLeft: 0  // fixes left on this question before it is skipped
+    backspacesLeft: 0, // fixes left on this question before it is skipped
+
+    // --- only used while a click-the-map question is on screen ---
+    wrongClicks: []    // states already clicked and already refused
   };
 
   // Called when the round is over. main.js supplies it.
@@ -183,10 +197,21 @@ const Quiz = (function () {
       answers: [],
       typed: "",
       pendingWrong: "",
-      backspacesLeft: 0
+      backspacesLeft: 0,
+      wrongClicks: []
     };
 
     onRoundEnd = whenFinished;
+
+    // Click-the-map modes get more room for the map, because they have
+    // no answer buttons underneath it. A bigger map means Rhode Island
+    // is a bigger thing to hit.
+    document.body.classList.toggle("is-map-click", isMapClick());
+
+    // Every round starts with the map not listening and the zoom panel
+    // away. The click modes switch both on; the others leave them off.
+    USMap.setClickable(false);
+    USMap.hideZoom();
 
     if (CONFIG.debug) {
       console.log("[quiz] round started:", {
@@ -237,34 +262,50 @@ const Quiz = (function () {
     state.typed = "";
     state.pendingWrong = "";
     state.backspacesLeft = CONFIG.backspacesPerQuestion;
+    state.wrongClicks = [];
 
     updateHud();
     drawBackspaces();
     clearFeedback();
     hideTooltip();
 
-    // Light up the state being asked about.
-    USMap.highlight(state.current.abbr);
+    // Light up the state being asked about - EXCEPT in the click modes,
+    // where lighting it up would be handing over the answer. There the
+    // map stays blank and the question is read instead.
+    if (isMapClick()) {
+      USMap.clearAll();
+    } else {
+      USMap.highlight(state.current.abbr);
+    }
 
     if (CONFIG.debug) {
       el("quiz-debug-answer").textContent =
-        "Debug - the answer is: " + answer;
+        "Debug - the answer is: " + answer + " (" + state.current.abbr + ")";
     }
 
     if (state.isRevisit) {
       say("Let's try this one again!");
     }
 
-    // Show the right kind of answer area for this mode, and hide the other.
+    // Show the one answer area this mode uses, and hide the other two.
     const typing = (state.rules.answerWith === "typing");
-    el("quiz-choices").hidden = typing;
+    const clicking = isMapClick();
+    el("quiz-choices").hidden = typing || clicking;
     el("quiz-typing").hidden = !typing;
+    el("quiz-target").hidden = !clicking;
 
     if (typing) {
       askWithTyping();
+    } else if (clicking) {
+      askWithMapClick();
     } else {
       askWithChoices();
     }
+  }
+
+  // Is the current mode answered by clicking the map? (Modes 9 and 10.)
+  function isMapClick() {
+    return !!(state.rules && state.rules.answerWith === "mapClick");
   }
 
   // Mode 1: four buttons, one right answer.
@@ -334,6 +375,75 @@ const Quiz = (function () {
     }
 
     return picked;
+  }
+
+  /* ==========================================================
+     MODE 9: FINDING IT ON THE MAP
+
+     The name is READ, and the answer is given by clicking the
+     right shape. The map is deliberately left blank, because a
+     lit-up state would be the answer.
+
+     The two chances work exactly like multiple choice: the
+     second click IS the second chance, and a question is never
+     asked again. A state that has already been refused turns
+     red and stops counting - clicking it again does nothing,
+     the same way a wrong choice button switches itself off.
+     ========================================================== */
+
+  function askWithMapClick() {
+    // The question, in big letters, since the map cannot show it.
+    el("quiz-target").textContent = state.current[state.rules.asks];
+
+    // The bigger view of the crowded north-east. Shown before clicking
+    // is switched on, so that it goes live along with the big map.
+    USMap.showZoom(el("quiz-zoom"));
+
+    // Now the map will listen. It is switched off again the moment
+    // the round ends, so it never answers questions on other screens.
+    USMap.setClickable(true, judgeMapClick);
+  }
+
+  function judgeMapClick(abbr) {
+    // Nothing is being asked right now (mid-flash, or the round is
+    // over), so a stray click is just a click.
+    if (!state.current || !isMapClick()) return;
+
+    // Already refused once. Not a second strike - a double-click
+    // should not be able to use up both chances in one go.
+    if (state.wrongClicks.indexOf(abbr) !== -1) return;
+
+    state.attempts++;
+
+    if (abbr === state.current.abbr) {
+      awardMapClick();
+    } else if (state.attempts === 1) {
+      state.wrongClicks.push(abbr);
+      USMap.setLook(abbr, "is-wrong");
+      Sound.play("wrong");
+      say("Not that one. Try again!");
+      logMath(0);
+    } else {
+      state.wrongClicks.push(abbr);
+      USMap.setLook(abbr, "is-wrong");
+      revealAndRetire();
+    }
+  }
+
+  // Right state clicked. Same scoring as every other mode.
+  function awardMapClick() {
+    USMap.setClickable(false);
+    USMap.setLook(state.current.abbr, "is-correct");
+    USMap.showRing(state.current.abbr);
+    Sound.play("correct");
+
+    const gained = awardPoints();
+
+    say(isSecondChance()
+      ? "Right on the second try. +" + gained + " points"
+      : "Yes! +" + gained + " points");
+
+    later(CONFIG.feedbackSeconds, nextQuestion);
   }
 
   /* ==========================================================
@@ -729,6 +839,15 @@ const Quiz = (function () {
 
     Sound.play("wrong");
     USMap.setLook(state.current.abbr, "is-correct");
+
+    // In the click modes the map was blank, so the green shape is the
+    // only thing pointing at the answer. Ring it, or the eye has to
+    // hunt for it. Clicking is switched off while it is being shown.
+    if (isMapClick()) {
+      USMap.setClickable(false);
+      USMap.showRing(state.current.abbr);
+    }
+
     say("The answer is " + correct + ".");
 
     retire();
@@ -830,12 +949,21 @@ const Quiz = (function () {
 
   function finishRound() {
     cancelTimers();
+
+    // Clicking goes off FIRST. There is only one map and it gets moved
+    // to other screens; a listener left on would answer questions
+    // nobody is asking.
+    USMap.setClickable(false);
+    USMap.hideZoom();
     USMap.clearAll();
+
     el("quiz-choices").innerHTML = "";
     el("quiz-letters").innerHTML = "";
     el("quiz-skip").hidden = true;
     el("quiz-typing").hidden = true;
+    el("quiz-target").hidden = true;
     el("hud-backspaces").hidden = true;
+    document.body.classList.remove("is-map-click");
     hideTooltip();
     clearFeedback();
 
@@ -881,6 +1009,10 @@ const Quiz = (function () {
 
     if (state.rules.answerWith === "typing") {
       handleTypingKey(event);
+    } else if (isMapClick()) {
+      // Nothing to type and nothing to number: this mode is answered
+      // with the mouse. Keys are left alone on purpose.
+      return;
     } else {
       handleChoiceKey(event);
     }

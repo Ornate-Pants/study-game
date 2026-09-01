@@ -50,6 +50,10 @@
         Test Bonus Round (60s)
       </button>
     </p>
+
+    <!-- Which build this is. main.js fills it in from CONFIG.APP_VERSION,
+         so the number is only ever written down in data/config.js. -->
+    <p class="version-tag" id="version-tag"></p>
   </section>
 
   <!-- ========== MODE SELECT ========== -->
@@ -97,8 +101,22 @@
 
     <h2 id="quiz-prompt">Which state is lit up?</h2>
 
-    <!-- The map moves here while a round is being played. -->
-    <div id="quiz-map" class="map-frame"></div>
+    <!-- The thing being looked for, in big letters (Modes 9 and 10).
+         In those modes the map must NOT light anything up, because the
+         lit state would BE the answer - so the question is read here
+         instead. Hidden in every other mode. -->
+    <p id="quiz-target" class="quiz-target" hidden></p>
+
+    <!-- The map moves here while a round is being played. In the
+         click-the-map games a second, bigger view of the crowded
+         north-eastern states sits beside it - js/map.js fills that
+         one in, and only for those games. -->
+    <div class="quiz-map-row">
+      <div id="quiz-map" class="map-frame"></div>
+      <div id="quiz-zoom" class="map-frame zoom-frame" hidden>
+        <p class="zoom-label">The small states, bigger</p>
+      </div>
+    </div>
 
     <!-- The four answer buttons go in here (Modes 1, 4, 7). -->
     <div id="quiz-choices" class="choice-list"></div>

@@ -35,6 +35,8 @@
   --map-border:    #ffffff;   /* the lines between states */
   --map-outline:   #6b7794;   /* thin edge drawn around a colored state */
   --map-highlight: #f0a500;   /* "THIS is the state we are asking about" */
+  --map-hover:     #bcc7d8;   /* the state under the mouse, in the click modes */
+  --map-backdrop:  #e7ebf2;   /* the neighbours in the zoom panel, kept quieter */
 
   /* One color per region, 1 to 10. They are deliberately different
      from each other so two regions next to each other never look
@@ -127,6 +129,14 @@ h2 {
   font-size: 22px;
   color: var(--ink-soft);
   margin: 0 0 24px;
+}
+
+/* Which build this is, small and quiet at the foot of the title
+   screen. The number itself comes from data/config.js. */
+.version-tag {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 28px 0 0;
 }
 
 .stub-note {
@@ -402,6 +412,106 @@ input:focus-visible {
   max-height: 38vh;
 }
 
+/* In the click-the-map modes there are no answer buttons under the map,
+   so the map gets that room instead - taller, and wider than the 900px
+   the rest of the game is laid out in. js/quiz.js puts this class on for
+   the length of a click round and takes it off again afterwards.
+
+   Both limits are needed. Height alone does nothing on a wide screen and
+   width alone does nothing on a short one; whichever runs out first is
+   the one holding the map back. */
+body.is-map-click .app {
+  max-width: 1400px;
+}
+
+/* 52vh, not the 62vh a click mode could otherwise have. These modes put
+   the state's name in a big box ABOVE the map, and the "Not that one,
+   try again" line has to stay on screen below it. At 62vh that line
+   fell just under the bottom of the window on an ordinary 1366 x 768
+   laptop - the map looked splendid and the kid never saw the reply. */
+body.is-map-click #quiz-map .us-map {
+  max-height: 52vh;
+}
+
+/* --- The map, and the zoom panel beside it ---
+   Side by side, because the panel has to be big enough to be worth
+   having: enlarging Rhode Island in a corner of the map itself would
+   have meant covering Florida, and there is nowhere else on the map
+   with room. Off the click modes the panel is hidden and the map has
+   the row to itself, exactly as before. */
+.quiz-map-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+#quiz-map {
+  flex: 1;
+  min-width: 0;
+}
+
+/* 420px is not a guess. The panel shows about 171 map units across, so
+   this is what makes Rhode Island - 14 of those units - land at about
+   32 pixels wide instead of the 11 it gets on the full map. Make the
+   panel narrower and RI goes straight back to being fiddly.
+
+   On a narrower window the panel gives up a little rather than a lot:
+   it is the thing being clicked, so it is the LAST thing that should
+   shrink. The floor of 360px keeps Rhode Island near 29px even then. */
+.zoom-frame {
+  flex: 0 0 clamp(360px, 40%, 420px);
+  padding: 8px 8px 10px;
+  margin: 12px 0 0;
+}
+
+.zoom-label {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 2px 0 6px;
+}
+
+/* The lines between states are drawn at map scale. The panel is showing
+   a small piece of that map blown up, so at full width they come out
+   fat; this thins them back to about a pixel. */
+.us-map-zoom .us-map-borders {
+  stroke-width: 0.5;
+}
+
+/* The neighbouring states in the panel, drawn a shade paler so the six
+   it exists for are the ones your eye lands on. They are still just as
+   clickable as any other state.
+
+   The :not() pair keeps this out of the way of the answer colors: a
+   backdrop state that gets clicked and refused must still go red. */
+.us-map-backdrop .us-map-state:not(.is-wrong):not(.is-correct) {
+  fill: var(--map-backdrop);
+}
+
+.us-map-zoom {
+  max-height: none;
+}
+
+/* Below this there is genuinely not the width for two maps abreast, so
+   the panel goes under the map. It is the last resort, not the first:
+   stacked, the pair is taller than a window and the answer line ends up
+   below the fold, which side by side avoids even on a small laptop. The
+   map gives up height here to keep that as short as it can be. */
+@media (max-width: 800px) {
+  .quiz-map-row {
+    display: block;
+  }
+
+  body.is-map-click #quiz-map .us-map {
+    max-height: 34vh;
+  }
+
+  .zoom-frame {
+    max-width: 420px;
+    margin: 12px auto 0;
+  }
+}
+
 /* --- The 50 states, plain and unpicked --- */
 .us-map-state {
   fill: var(--map-land);
@@ -436,6 +546,26 @@ input:focus-visible {
 
 .us-map-inert {
   pointer-events: none;
+}
+
+/* --- The click-the-map modes (9 and 10) ---
+   js/map.js adds is-clickable while a click question is up, and takes
+   it off again afterwards, so the map only LOOKS clickable when it
+   really is. The mouse gets a pointer and the state under it lifts a
+   shade, which is what makes a small state findable before you click.
+
+   :not() is doing real work here. A hover rule counts more than a
+   plain .is-wrong rule, so without it a mouse resting on a state he
+   just got wrong would rub the red back out. */
+.us-map.is-clickable .us-map-state {
+  cursor: pointer;
+}
+
+.us-map.is-clickable
+  .us-map-state:not(.is-wrong):not(.is-correct):not(.us-map-inert):hover {
+  fill: var(--map-hover);
+  stroke: var(--map-outline);
+  stroke-width: 1.2;
 }
 
 /* --- The quiz highlight: the state being asked about --- */
@@ -905,6 +1035,21 @@ input:focus-visible {
 }
 
 /* --- The message line under the buttons --- */
+/* --- The thing being looked for, in the click-the-map modes ---
+   In those modes the map cannot show the question, so this IS the
+   question. It is the loudest thing on the screen for that reason. */
+.quiz-target {
+  font-size: 34px;
+  font-weight: 800;
+  color: var(--ink);
+  background: var(--card);
+  border: 3px solid var(--line);
+  border-radius: var(--radius);
+  display: inline-block;
+  padding: 10px 28px;
+  margin: 4px 0 0;
+}
+
 .quiz-feedback {
   font-size: 24px;
   font-weight: 700;

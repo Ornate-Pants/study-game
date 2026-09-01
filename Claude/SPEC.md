@@ -1,6 +1,6 @@
 # State Quest: States & Capitals Study Game
 ## Build Specification for Claude Code
-**Version:** 1.0 — shipped | **Owner:** Scott | **Player:** Paxton (grades 3-4)
+**Version:** 1.1 — built, awaiting Gate 6 | **Owner:** Scott | **Player:** Paxton (grades 3-4)
 
 ---
 
@@ -160,6 +160,10 @@ When they run out, the question is **skipped for him** the moment he needs anoth
 **Progress counter.** "Question X of Y" counts questions *finished with*, not questions shown. Otherwise a 5-question round with one skip reads "6 of 5". A returning question shows the number it had before.
 
 **Multiple choice second chance.** Wrong first pick: the wrong option grays out, player immediately picks again from the remaining 3. Correct on 2nd pick costs `penaltyPoints`. Wrong 2nd pick = reveal + retire. (MC does not re-queue; the second guess IS the second chance.)
+
+**Map-click second chance (added Phase 6).** The same rule as multiple choice, with the map in place of the four buttons. A wrong click turns that state red and **the red state is then dead**: clicking it again does nothing at all. That is the exact parallel of a grayed-out choice button, and it is not optional — without it an ordinary double-click would spend both chances in a single gesture, on a screen where the thing being clicked is much smaller than a button. The second click on a *different* state is the second chance; wrong there = reveal + retire.
+
+**In click modes the map must not highlight the target.** The map is the answer sheet, so lighting the state up would hand over the answer. The question is shown as text instead, and the map stays plain until it is answered. The "look here" ring returns only on the reveal, where it points at the answer being shown.
 
 **Typed-answer comparison rules.**
 - Letter-by-letter matching against the answer string.
@@ -355,7 +359,7 @@ Move him with the physics body's own reposition, not by setting the drawn shape'
 
 Claude Code should execute phase by phase and STOP at each gate for Scott to test in a browser before continuing. Each gate lists exactly what Scott checks.
 
-**Progress: Phases 0-5 and 5B are BUILT and have PASSED their gates. v1.0 is complete and shipped. Remaining: Phase 6 (Mode 9, v1.1), Phase 7 (Modes 4-8 and 10, v2.0), Phase 8 (Exam Mode, v2.1 - see Section 14).**
+**Progress: Phases 0-5 and 5B are BUILT and have PASSED their gates; v1.0 is shipped. Phase 6 (Mode 9) is BUILT and its check suite passes, awaiting Scott's Gate 6 play test — that is v1.1. Remaining: Phase 7 (Modes 4-8 and 10, v2.0), Phase 8 (Exam Mode, v2.1 - see Section 14).**
 
 ### Phase 0: Scaffold (v1.0) — DONE, gate passed
 Project structure, `index.html` loading everything via script tags from `file://`, Phaser bundled locally, empty screen state machine (Title -> stub screens), config + full states data file (Appendix A).
@@ -391,9 +395,49 @@ says — it was silently doubling. Backspace rationed per Section 6, with the co
 underneath; hazards come often enough; the backspace arrows count down and the question is
 skipped when they run out.
 
-### Phase 6: Mode 9 (v1.1)
+### Phase 6: Mode 9 (v1.1) — BUILT, awaiting gate
 Click-the-map mode: name shown as text prompt, SVG click handling, 2-click second-chance rule, hover affordance (cursor + subtle outline).
 **GATE 6:** Misclicks behave per spec; tiny states (RI, DE) are clickable without frustration (if not, add a zoom-on-region option to config as a stretch).
+
+> **How it was built.** One delegated click listener on the whole map rather than fifty
+> (`USMap.setClickable`), switched off the moment a round ends — there is only ONE map and it is
+> *moved* between screens, so a listener left on would follow it onto Pick Your Regions. The quiz
+> engine gained a third `answerWith` (`"mapClick"`) beside `"choices"` and `"typing"`; the scoring,
+> the second-chance rule and reveal-and-retire are the same code all three modes already shared.
+> Mode 10 in Phase 7 is the same line with `asks: "capital"` — the click compares the state's
+> `abbr`, which is the target either way.
+>
+> **On the small states — the zoom panel, added after the Gate 6 play test.** The first attempt was
+> just to give the map more room, since click modes have no answer buttons under it
+> (`body.is-map-click`). That took Rhode Island from a speck to about 12 x 17 real pixels, and the
+> play test's verdict on that was *findable, but too fiddly to click*. So the stretch named above
+> was built.
+>
+> **It is a second, smaller map, not a magnifying transform.** A panel beside the main map holds
+> copies of the same shapes seen through a `viewBox` covering only the north-east corner, so the
+> browser does the enlarging and there is no zoom arithmetic anywhere in the code. Rhode Island is
+> **32 pixels** wide in the panel against 11 on the map; Delaware 42; Connecticut 68.
+>
+> Three things make it cost almost nothing:
+> - **A copy is an ordinary state shape with an ordinary `data-abbr`.** The click handler cannot
+>   tell a copy from the original and does not need to, so clicking in the panel needed no new code
+>   at all. `USMap.setLook` writes to a state and its copies together, which is what keeps the red
+>   and the green identical in both views.
+> - **The copies lose their `id`.** An id may be used once per page — this is the same trouble the
+>   one-map rule at the top of `js/map.js` exists to avoid.
+> - **Nothing is drawn twice while it is not needed.** The panel is taken off the page between
+>   rounds, so anything counting the states on the page finds exactly fifty.
+>
+> The six it shows are the ones the play test named: RI, MD, DE, CT, MA, NJ. Their neighbours are
+> drawn a shade paler behind them, so the six read as the subject rather than the panel being one
+> flat sheet of grey — still clickable, just quieter. `CONFIG.zoomSmallStates` turns the whole
+> thing off.
+>
+> Two things that had to be got right and were not obvious: the Washington DC marker is a dot sized
+> for the full map, and blown up this far it reads as a hole punched in Maryland, so it is not
+> copied. And the white lines between the states must be copied or the panel is one grey blob —
+> each line is named for the two states it runs between (`ct-ma`), which is how the panel takes
+> only the ones it needs.
 
 ### Phase 7: Modes 4-8 and 10 (v2.0)
 Reuse engines: capital variants (4-6) = typed/MC engine pointed at `capital` + hint button; 7-8 = abbreviation variants with exact-capitalization rule; 10 = click engine pointed at capitals. Un-gray the mode select buttons.
@@ -567,3 +611,28 @@ ranked against a practice one. The high score table gains a mark on exam rows.
 17. **No sound files (Phase 5).** The five effects are generated from notes in `js/audio.js` rather than shipped as `.ogg` files. See the note under Section 11 for why. Editing a sound means editing numbers, not opening an audio editor.
 18. **Art is separated from physics (Phase 5).** Every moving part in the runner is still the invisible box it was in Phase 4; sprites are drawn on top and follow along. This is deliberate and load-bearing — it is what lets artwork be swapped without re-testing the jump and hazard maths. Do not "simplify" it by giving the sprites their own physics bodies.
 19. **Known limit for Phase 7:** `capitalAlternates` matching is built and working, but alternates of *different lengths* will break the dash display in Mode 5 — "Saint Paul" is 10 characters and "St. Paul" is 8. The dashes will need to key off whichever candidate still matches what has been typed. No state name has an alternate, so Modes 2 and 3 are unaffected.
+
+### Decided during Phase 6
+
+20. **A state clicked and refused is dead for that question** — it stays red and further clicks on
+    it do nothing. Written up under Section 6. Without it a double-click spends both chances at
+    once, which is much easier to do on a small shape than on a button.
+21. **The map gets more room in the click modes** (38vh → 52vh, and a wider page), because those
+    modes have no answer buttons beneath it. Free, but not enough on its own — see the next item.
+    Not more than 52vh: the state's name sits in a big box *above* the map in these modes, and at
+    62vh the "Not that one, try again" line fell below the bottom of the window on an ordinary
+    1366 x 768 laptop. The map looked splendid and the reply was invisible.
+21b. **The zoom panel, after the Gate 6 play test said the small states were too fiddly.** Scott
+    named the six: RI, MD, DE, CT, MA, NJ. Built as a second small map beside the first rather than
+    as a magnifier drawn on the map itself, because there is nowhere on the map with room — the
+    only empty space big enough is in the Atlantic, and a panel there covers Florida. Written up
+    under Phase 6 in Section 12. The trade is that the main map is narrower during a click round;
+    that costs the big states nothing, since none of them were ever hard to hit.
+22. **There is a version number in the game now** — `CONFIG.APP_VERSION`, shown small at the foot of
+    the title screen. It is written down in exactly one place, `data/config.js`, the same rule as
+    every other number in the game.
+23. **The gate suites now exit non-zero when a check fails.** They did not, so `run-all.py` reported
+    "passed" for any gate that ran to the end, however many FAIL lines it printed. Found by running
+    the full set for this phase; gate 2's reveal-pause check had been failing on a good build
+    because it started its stopwatch after a screenshot. The check was measuring itself, not the
+    game — the kind of test bug `tests/README.md` warns about.

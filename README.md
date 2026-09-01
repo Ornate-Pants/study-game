@@ -12,24 +12,32 @@ Double-click **`state-quest/index.html`**. That is the whole installation.
 No server, no build step, no internet. It runs straight from the folder, which is the
 constraint that shapes most of the design decisions in the spec.
 
-## What works today (v1.0)
+## What works today (v1.1)
 
 | | |
 |---|---|
 | **Mode 1** | State Match — see a state, pick its name |
 | **Mode 2** | State Speller — first letter shown, dashes for the rest |
 | **Mode 3** | State Speller: Hard — no first letter, no dashes, no length hint |
+| **Mode 9** | Find the State — read a name, click it on the map, with a zoom panel for the small north-eastern states |
 | **Bonus round** | Endless runner: tap to hop, hold to jump, dodge cacti and holes, grab coins |
 | **High scores** | Top ten, saved in the browser, survives closing it |
 
-Modes 4–10 are on the mode-select screen greyed out as "Coming Soon". The build order for
+Modes 4–8 and 10 are on the mode-select screen greyed out as "Coming Soon". The build order for
 those is in the spec.
+
+The title screen shows which build you are running. That number lives in `data/config.js`.
 
 ## Tuning it
 
 Every number that changes how the game feels lives in **`state-quest/data/config.js`**, with a
 plain-English comment on each one. Points, jump height, how often cacti appear, how long a
 stun lasts, how many backspaces a spelling question allows. Change a number, save, refresh.
+
+`zoomSmallStates` is the one switch rather than a number: it puts a second, bigger map beside the
+first in Mode 9, holding Rhode Island, Maryland, Delaware, Connecticut, Massachusetts and New
+Jersey, which are too small to click comfortably on the full map. Set it to `false` to play
+without it.
 
 The questions themselves live in **`state-quest/data/states.js`** — the answer key, and the
 only file that would change to teach a different subject.

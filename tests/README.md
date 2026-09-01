@@ -32,6 +32,7 @@ testing in the same browser Paxton plays in is the whole point.
 | **gate3** | Modes 2 and 3 spelling, capitalisation rule, skips, the backspace ration |
 | **gate4** | the runner: jump height, hazard fairness, stuns, coins, the double-jump easter egg |
 | **gate5** | high scores, name entry, sound, artwork, and surviving a browser restart |
+| **gate6** | Mode 9: clicking the map, the zoom panel, and above all that the map never shows the answer |
 
 Screenshots and browser profiles are written to `tests/_output/`, which git ignores. Delete it
 whenever.
@@ -43,6 +44,13 @@ Chrome does not — file access in particular. That is exactly why the map and t
 inlined rather than loaded as files (SPEC.md sections 9 and 10): a loose-file version passes
 every check here and then fails for the actual player. **A green run is not a substitute for
 opening `index.html` yourself.**
+
+**Wait for the thing, do not sleep a guessed amount.** Answering a question starts a one-second
+flash before the next one appears, and during it the map stops listening. Checks that slept a
+fixed time and then clicked failed about one run in three — not because the game was wrong, but
+because the click landed in that gap. `gate6.py` waits for the state itself to change (and for
+gate 2's reveal timing, times from the reveal rather than from a few checks later). If a check
+here is flaky, look for a sleep before blaming the game.
 
 **Some checks are measurements, and measurements are fiddly.** The runner ones sample a moving
 game through a browser, and a few have had to be made more forgiving — taking the best of

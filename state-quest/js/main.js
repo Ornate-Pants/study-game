@@ -34,7 +34,7 @@ const MODES = [
   { id: 6,  name: "Capital Speller: Hard",   blurb: "Spell the capital with no help.",        status: "soon"  },
   { id: 7,  name: "Abbreviation Match",      blurb: "See a state. Pick its 2 letters.",       status: "soon"  },
   { id: 8,  name: "Abbreviation Hard",       blurb: "Type the 2 letters yourself.",           status: "soon"  },
-  { id: 9,  name: "Find the State",          blurb: "Read a name. Click it on the map.",      status: "soon"  },
+  { id: 9,  name: "Find the State",          blurb: "Read a name. Click it on the map.",      status: "ready" },
   { id: 10, name: "Find the Capital's State", blurb: "Read a capital. Click its state.",      status: "soon"  }
 ];
 
@@ -516,6 +516,11 @@ const App = (function () {
       document.getElementById("finish-runner-button").hidden = false;
       document.getElementById("clear-scores-button").hidden = false;
     }
+
+    // Which build this is. Read from config so the number is only ever
+    // written down in one place.
+    document.getElementById("version-tag").textContent =
+      "v" + CONFIG.APP_VERSION;
 
     buildModeSelect();
     buildRegionSelect();
