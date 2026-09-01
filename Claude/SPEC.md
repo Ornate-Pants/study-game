@@ -1,6 +1,6 @@
 # State Quest: States & Capitals Study Game
 ## Build Specification for Claude Code
-**Version:** 1.1 — built, awaiting Gate 6 | **Owner:** Scott | **Player:** Paxton (grades 3-4)
+**Version:** 1.1 — shipped | **Owner:** Scott | **Player:** Paxton (grades 3-4)
 
 ---
 
@@ -32,7 +32,7 @@ Educational goal: learn all 50 states and capitals, correct spelling included, b
 
 ## 3. File Structure
 
-As actually built through Phase 5B (v1.0 shipped). Files marked NEW were not in the original plan; why each exists is noted.
+As actually built through Phase 6 (v1.1 shipped). Files marked NEW were not in the original plan; why each exists is noted. Phase 6 added no files: Mode 9 and its zoom panel live in the `js/quiz.js` and `js/map.js` that were already there.
 
 ```
 state-quest/
@@ -359,7 +359,7 @@ Move him with the physics body's own reposition, not by setting the drawn shape'
 
 Claude Code should execute phase by phase and STOP at each gate for Scott to test in a browser before continuing. Each gate lists exactly what Scott checks.
 
-**Progress: Phases 0-5 and 5B are BUILT and have PASSED their gates; v1.0 is shipped. Phase 6 (Mode 9) is BUILT and its check suite passes, awaiting Scott's Gate 6 play test — that is v1.1. Remaining: Phase 7 (Modes 4-8 and 10, v2.0), Phase 8 (Exam Mode, v2.1 - see Section 14).**
+**Progress: Phases 0-6 and 5B are BUILT and have PASSED their gates. v1.0 and v1.1 are shipped and tagged. Remaining: Phase 7 (Modes 4-8 and 10, v2.0), Phase 8 (Exam Mode, v2.1 - see Section 14).**
 
 ### Phase 0: Scaffold (v1.0) — DONE, gate passed
 Project structure, `index.html` loading everything via script tags from `file://`, Phaser bundled locally, empty screen state machine (Title -> stub screens), config + full states data file (Appendix A).
@@ -395,7 +395,7 @@ says — it was silently doubling. Backspace rationed per Section 6, with the co
 underneath; hazards come often enough; the backspace arrows count down and the question is
 skipped when they run out.
 
-### Phase 6: Mode 9 (v1.1) — BUILT, awaiting gate
+### Phase 6: Mode 9 (v1.1) — DONE, gate passed
 Click-the-map mode: name shown as text prompt, SVG click handling, 2-click second-chance rule, hover affordance (cursor + subtle outline).
 **GATE 6:** Misclicks behave per spec; tiny states (RI, DE) are clickable without frustration (if not, add a zoom-on-region option to config as a stretch).
 
