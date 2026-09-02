@@ -3,7 +3,7 @@
 BUILD-MAP  --  a one-time tool, NOT part of the game
 ============================================================
 
-Scott: you never need to run this. It has already been run,
+You never need to run this. It has already been run,
 and the two files it makes are sitting in assets/map/.
 It lives here so that IF the map ever needs rebuilding, the
 exact steps are written down instead of remembered.

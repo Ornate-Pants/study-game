@@ -2,7 +2,7 @@
    CONFIG - All the numbers you can change
    ============================================================
 
-   Scott: this is YOUR file. Every number that changes how the
+   This is YOUR file. Every number that changes how the
    game feels lives here, and nowhere else. Change a number,
    save the file, refresh the browser. That's it.
 

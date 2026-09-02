@@ -19,7 +19,7 @@
       Maine, this file puts a class name on Maine's shape and
       css/style.css decides what that class looks like. That
       way every color in the game lives in the stylesheet
-      where Scott can find it, and not scattered through the
+      where you can find it, and not scattered through the
       code.
 
    The name is USMap, not Map, because "Map" already means

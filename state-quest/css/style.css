@@ -28,7 +28,7 @@
   --shadow:     0 2px 0 rgba(26, 34, 56, 0.15);
 
   /* --- The map ---
-     Scott: these are the map's colors. Change a value here and the
+     These are the map's colors. Change a value here and the
      map changes everywhere it appears. Nothing else needs editing. */
 
   --map-land:      #d8dee9;   /* a state nobody has picked */

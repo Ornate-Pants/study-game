@@ -3,7 +3,7 @@
 One file per phase gate in SPEC.md section 12. Each one opens the real game in a real Chrome
 browser, plays it, and checks what happened — roughly 200 checks in total.
 
-**Scott: you never have to run these.** They exist so that the next change to the game does not
+**You never have to run these.** They exist so that the next change to the game does not
 quietly break something that already worked. If a future phase gets built, run them afterwards.
 
 ## Running them
@@ -21,7 +21,7 @@ pip install playwright
 ```
 
 No `playwright install` needed — they use your real Chrome (`channel="chrome"`), on purpose:
-testing in the same browser Paxton plays in is the whole point.
+testing in the same browser the game is really played in is the whole point.
 
 ## What each one covers
 
@@ -57,7 +57,7 @@ here is flaky, look for a sleep before blaming the game.
 **`?debug=1` shows the answer, so some checks must not use it.** Every gate opens the game in debug
 mode, because that is what lets a check see inside the engine — but debug also prints the answer on
 screen on purpose. Gate 8's whole subject is that an exam never gives the answer away, so those
-particular checks open the game with no flag at all and read the page as Paxton would see it. A
+particular checks open the game with no flag at all and read the page as the player would see it. A
 check about what is *visible* is worth nothing if it runs in the one mode built to reveal things.
 
 **Some checks are measurements, and measurements are fiddly.** The runner ones sample a moving

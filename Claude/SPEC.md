@@ -1,6 +1,6 @@
 # State Quest: States & Capitals Study Game
 ## Build Specification for Claude Code
-**Version:** 2.1 — built, awaiting Gate 8 | **Owner:** Scott | **Player:** Paxton (grades 3-4)
+**Version:** 2.1 — built, awaiting Gate 8 | **Player:** a 3rd-4th grader
 
 ---
 
@@ -20,13 +20,13 @@ Educational goal: learn all 50 states and capitals, correct spelling included, b
 ## 2. Hard Constraints (read first, these shape the architecture)
 
 1. **Runs from a local file.** Player opens `index.html` via `file://` in a browser. No server, no build step, no internet required at play time.
-   - `fetch()` of local JSON is blocked on `file://` in Chrome. **Therefore all data files are JavaScript files loaded via `<script>` tags** (e.g., `const STATES_DATA = {...}` in `data/states.js`), not fetched JSON. The structure is still JSON-shaped so Scott can hand-edit it.
+   - `fetch()` of local JSON is blocked on `file://` in Chrome. **Therefore all data files are JavaScript files loaded via `<script>` tags** (e.g., `const STATES_DATA = {...}` in `data/states.js`), not fetched JSON. The structure is still JSON-shaped so it can be edited by hand.
    - Bundle `phaser.min.js` locally in `lib/`. No CDN references.
    - High scores persist via `localStorage` (works on `file://` in Chrome/Edge/Firefox).
 2. **Hybrid rendering.** Use plain HTML/CSS/SVG (DOM) for the quiz phase, menus, and score screens. Use **Phaser 3** only for the platformer scene. Do not build the quiz UI inside Phaser; DOM is far better for text input, buttons, and an interactive SVG map.
 3. **All tunable numbers live in `data/config.js`.** Nothing gameplay-related is hardcoded in logic files. See Section 8.
 4. **Keyboard + mouse.** Desktop browser is the target. No mobile/touch requirement for v1.
-5. **Beginner-maintainable.** Scott will hand-edit data files. Keep them flat, commented, and obvious. Code comments should explain "why" at a level a non-programmer can skim.
+5. **Beginner-maintainable.** The data files are edited by hand. Keep them flat, commented, and obvious. Code comments should explain "why" at a level a non-programmer can skim.
 
 ---
 
@@ -56,7 +56,7 @@ state-quest/
     phaser.min.js
   tools/
     build-map.py        NEW - one-time tool that fetches and cleans the map.
-    us-states-source.svg    Scott never runs this; it is here so the map can
+    us-states-source.svg    You never run this; it is here so the map can
                             be rebuilt, and it checks itself against states.js.
     build-assets.py     NEW - one-time tool that pulls the runner's pictures
     kenney_*.zip              out of a Kenney art pack and inlines them.
@@ -114,14 +114,14 @@ const QUIZ_DATA = {
 ```
 
 Rules:
-- `region` is an integer 1-10 so Scott can re-map to the teacher's regions by editing one number per state.
+- `region` is an integer 1-10 so you can re-map to the teacher's regions by editing one number per state.
 - `abbr` doubles as the SVG element id, keeping map lookup trivial.
 - `capitalAlternates` handles legitimate spelling variants (Saint Paul / St. Paul). Comparison rules in Section 6.
 - Exactly 5 states per region in the initial data (see Appendix A) so rounds stay short.
 
 ---
 
-## 5. Regions (initial assignment, baked in now, Scott will re-map later)
+## 5. Regions (initial assignment, baked in now, re-map later if needed)
 
 | # | Region | States |
 |---|--------|--------|
@@ -200,7 +200,7 @@ A hint and a second chance do not stack: a question that took *any* kind of seco
 
 Mode-select screen shows all 10. **All ten are now playable** — the "Coming Soon" grey-out built in Phase 0 is still in `js/main.js` and is what Exam Mode's own additions would reuse; turning a mode on is still one word (`status`).
 
-**How the ten are laid out (Scott's call, after Gate 7).** Modes 1-6 fill the first two rows three across. The last four are pairs — 7 and 8 are the abbreviation games, 9 and 10 the click-the-map games — so each pair takes a row of its own in columns 1 and 3, with column 2 left empty:
+**How the ten are laid out (a deliberate layout call, after Gate 7).** Modes 1-6 fill the first two rows three across. The last four are pairs — 7 and 8 are the abbreviation games, 9 and 10 the click-the-map games — so each pair takes a row of its own in columns 1 and 3, with column 2 left empty:
 
 ```
     1   2   3
@@ -288,9 +288,9 @@ Values added during the build, because Section 3 forbids hardcoding gameplay num
 
 **`examBonusMultiplier` arrived in Phase 8** and is now in `data/config.js` with the rest. Every value in this block is live.
 
-**One penalty, one number (Scott's decision, replaces the old split rules).** There used to be two competing ideas — a hint penalty in points and a separate "half credit" formula for second chances — and they disagreed with each other and with the built config. They are now the same thing: **needing a second chance costs a flat `penaltyPoints` (2), however it happened.** Hint, skip-and-return, or right-on-the-second-pick all land a solved question on `5 - 2 = 3`.
+**One penalty, one number (settled, replaces the old split rules).** There used to be two competing ideas — a hint penalty in points and a separate "half credit" formula for second chances — and they disagreed with each other and with the built config. They are now the same thing: **needing a second chance costs a flat `penaltyPoints` (2), however it happened.** Hint, skip-and-return, or right-on-the-second-pick all land a solved question on `5 - 2 = 3`.
 
-Why flat and not "half credit": at `basePoints: 5` the two happen to agree (both give 3), but they drift the moment Scott tunes `basePoints`. At 10 points a question, half credit is 5 while the flat penalty is 8. A flat cost keeps the rule sayable out loud — *"a second chance costs 2 points"* — which is the kind of thing a 9-year-old can actually hold on to. It also means the penalty never scales into something punishing.
+Why flat and not "half credit": at `basePoints: 5` the two happen to agree (both give 3), but they drift the moment `basePoints` is tuned. At 10 points a question, half credit is 5 while the flat penalty is 8. A flat cost keeps the rule sayable out loud — *"a second chance costs 2 points"* — which is the kind of thing a 9-year-old can actually hold on to. It also means the penalty never scales into something punishing.
 
 If the hint ever needs to cost more than a skip, split this back into two values; nothing in the engine depends on there being only one.
 
@@ -370,13 +370,13 @@ Move him with the physics body's own reposition, not by setting the drawn shape'
 
 ## 12. Build Plan: Phases and Test Gates
 
-Claude Code should execute phase by phase and STOP at each gate for Scott to test in a browser before continuing. Each gate lists exactly what Scott checks.
+Claude Code should execute phase by phase and STOP at each gate to be tested in a browser before continuing. Each gate lists exactly what to check.
 
-**Progress: Phases 0-7 and 5B are BUILT. v1.0 and v1.1 are shipped and tagged; Phase 7 (v2.0) passed its gate in play. Phase 8 is BUILT and its automated checks pass; it is waiting on GATE 8, Scott at a browser. That is every phase in this plan.**
+**Progress: Phases 0-7 and 5B are BUILT. v1.0 and v1.1 are shipped and tagged; Phase 7 (v2.0) passed its gate in play. Phase 8 is BUILT and its automated checks pass; it is waiting on GATE 8, a person at a browser. That is every phase in this plan.**
 
 ### Phase 0: Scaffold (v1.0) — DONE, gate passed
 Project structure, `index.html` loading everything via script tags from `file://`, Phaser bundled locally, empty screen state machine (Title -> stub screens), config + full states data file (Appendix A).
-**GATE 0:** Scott double-clicks `index.html`; title screen appears; can click through stub screens; no console errors on `file://`.
+**GATE 0:** Double-click `index.html`; title screen appears; can click through stub screens; no console errors on `file://`.
 
 ### Phase 1: Map + Data (v1.0) — DONE, gate passed
 Acquire and integrate the SVG per Section 10. Build the highlight test page. Region select screen with live map preview (selected regions' states tinted).
@@ -384,22 +384,22 @@ Acquire and integrate the SVG per Section 10. Build the highlight test page. Reg
 
 ### Phase 2: Quiz Engine, Mode 1 (v1.0) — DONE, gate passed
 Question queue, shuffling, MC rendering, 2nd-chance logic, scoring per Section 8 (flat `basePoints` per question; the region bonus is added once at the results screen and never during the quiz), the flat second-chance penalty, reveal/retire, green/red feedback, round summary screen.
-**GATE 2:** Scott plays full Mode 1 rounds: 1 region and 2 regions. Verify point math on screen matches Section 8 by hand. Verify a deliberately-missed question behaves per Section 6.
+**GATE 2:** Play full Mode 1 rounds: 1 region and 2 regions. Verify point math on screen matches Section 8 by hand. Verify a deliberately-missed question behaves per Section 6.
 
 ### Phase 3: Modes 2 and 3 (v1.0) — DONE, gate passed
 Typed input engine: dash display, letter-by-letter validation, red flash + backspace, capitalization tooltip, skip button, revisit queue, hard mode (no scaffolding). Shared code with Mode 5/6/8 in mind (answer string is a parameter, not hardcoded to `name`).
-**GATE 3:** Scott spells correctly, misspells, tests lowercase first letter (tooltip fires), skips twice (reveal + retire), multi-word state (New Hampshire in region 1).
+**GATE 3:** Spell correctly, misspells, tests lowercase first letter (tooltip fires), skips twice (reveal + retire), multi-word state (New Hampshire in region 1).
 
 ### Phase 4: Runner (v1.0) — DONE, gate passed
 Phaser scene with placeholder rectangles: accel, jump, coins, obstacles, pits, stun, countdown from a hardcoded 60 for testing, score lock at 0.
-**GATE 4:** Scott plays with a fixed 60s timer. Checks: fair obstacle spacing, stun feels ok (not rage-inducing), jump reaches platforms, coins register.
+**GATE 4:** Play with a fixed 60s timer. Checks: fair obstacle spacing, stun feels ok (not rage-inducing), jump reaches platforms, coins register.
 
 ### Phase 5: Integration + Scores + Polish (v1.0) — DONE, gate passed
 Wire quiz points into runner timer. Results math. localStorage high scores + name entry + fanfare. Swap placeholders for Kenney sprites. Add all sounds + mute. Instruction text pass at grade level.
-**GATE 5 (v1.0 SHIP):** Two full end-to-end rounds, one setting a high score, then close the browser fully, reopen, confirm high scores persisted. Kid test: Paxton plays; Scott notes friction.
+**GATE 5 (v1.0 SHIP):** Two full end-to-end rounds, one setting a high score, then close the browser fully, reopen, confirm high scores persisted. Kid test: a real kid plays; note the friction.
 
 ### Phase 5B: Play-test fixes (v1.0) — DONE, gate passed
-Not in the original plan; it came out of watching Paxton play. Variable jump height (tap for a
+Not in the original plan; it came out of watching a real kid play. Variable jump height (tap for a
 hop, hold for a full jump, per Section 9). One-way platforms, and the runner drawn in front of
 them, so a ledge can be reached from below and he is never hidden behind one. Hazard frequency
 moved into `config.js` (`pitChance`, `obstacleChance`) and `hazardGapMin` fixed to mean what it
@@ -504,7 +504,7 @@ Reuse engines: capital variants (4-6) = typed/MC engine pointed at `capital` + h
 
 ### Phase 8: Exam Mode (v2.1) — BUILT, awaiting gate
 The switch described in Section 14, for all built modes: no hints, no second chances, and no feedback of any kind during the round. Backspace stays available and free, because with the letter-by-letter checking off there is nothing left to cheat against. Submit-based answering, the end-of-round review screen with per-question marks and a per-region tally, doubled region bonus, and an exam marker on high score rows.
-**GATE 8:** Scott plays an exam round and confirms nothing gives the answer away mid-round; the review screen matches what was actually answered; the per-region tally adds up; the doubled bonus lands once on the results screen; an exam high score is marked as one.
+**GATE 8:** Play an exam round and confirm nothing gives the answer away mid-round; the review screen matches what was actually answered; the per-region tally adds up; the doubled bonus lands once on the results screen; an exam high score is marked as one.
 
 > **How it was built.** No new modes and no new screens. `Quiz.start()` gained a fourth argument
 > carrying `{ exam: true }`, and everything that follows from it lives in one section of
@@ -556,15 +556,15 @@ The switch described in Section 14, for all built modes: no hints, no second cha
 - Add a `?debug=1` URL flag: shows the answer on screen, sets runner test timer, unlocks all modes. Never on by default.
 - Console-log the scoring math per question in debug mode so gate checks are easy.
 - Manual browser testing on `file://` in Chrome is the acceptance environment. Do not rely on dev-server-only behavior.
-- Keep functions small and commented; Scott may read this code with future Claude sessions.
+- Keep functions small and commented; This code may be read with future Claude sessions.
 
 ---
 
 ## 14. Exam Mode (v2.1 — built in Phase 8)
 
 Added after the first real play test. Everything else in this spec is **practice**: hints,
-second chances, immediate green and red. Exam Mode is the opposite — it is how Scott finds out
-what Paxton actually knows, and how Paxton proves it.
+second chances, immediate green and red. Exam Mode is the opposite — it is how you find out
+what the player actually knows, and how they prove it.
 
 **It is a switch, not a mode.** It can be turned on for any of the ten modes in Section 7. The
 toggle lives on the Region Select screen, below the region checkboxes, so the choice is made
@@ -603,10 +603,10 @@ answer is marked.
 - **Every question**, marked ✓, ✗ or "Skipped", showing what he answered and — where
   he was wrong — the right answer. A skipped question shows the right answer with a blank where
   his would have been.
-- **A per-region tally**, which is what tells Scott where to focus:
+- **A per-region tally**, which is what tells you where to focus:
   *"Great Lakes 5/5 · New England 3/5 · Pacific 4/5"*.
 
-> **Built grouped by region, not "in order" as this section first said** (Scott's call, Phase 8).
+> **Built grouped by region, not "in order" as this section first said** (a deliberate call, Phase 8).
 > Each region is a heading carrying its own tally, with its questions underneath. The reason for
 > the change is the reason the tally exists: it is there to say where to focus, and grouping puts
 > every wrong answer directly under the heading that counts it. A ten-region exam is fifty rows,
@@ -696,16 +696,16 @@ ranked against a practice one. The high score table gains a mark on exam rows.
 
 ---
 
-## Appendix B: Judgment Calls Made Without Explicit Direction (flag to Scott if wrong)
+## Appendix B: Judgment Calls Made Without Explicit Direction (flag them if wrong)
 
-1. ~~**MC half credit:** correct on 2nd guess in multiple choice = half credit.~~ **SETTLED by Scott:** replaced by the one flat `penaltyPoints` rule. See Section 8.
-2. **Hint penalty is points, not time,** since the quiz is untimed. **SETTLED by Scott:** it is the same 2 points a skip or a second pick costs, not a separate number. See Section 8.
+1. ~~**MC half credit:** correct on 2nd guess in multiple choice = half credit.~~ **SETTLED:** replaced by the one flat `penaltyPoints` rule. See Section 8.
+2. **Hint penalty is points, not time,** since the quiz is untimed. **SETTLED:** it is the same 2 points a skip or a second pick costs, not a separate number. See Section 8.
 3. **Stun keeps the countdown running** rather than adding a separate time penalty; losing 3+ seconds of collecting IS the cost.
-4. **Region bonus:** flat `10 * regionCount`, added once at the end of the round (not per-question, not compounded). Per-question value is always flat `basePoints`; more regions only lengthens the round by adding more questions. The hint/skip penalty values were flagged here as un-retuned; **Scott has since settled them** — one flat `penaltyPoints: 2` for every kind of second chance. See Section 8.
+4. **Region bonus:** flat `10 * regionCount`, added once at the end of the round (not per-question, not compounded). Per-question value is always flat `basePoints`; more regions only lengthens the round by adding more questions. The hint/skip penalty values were flagged here as un-retuned; **these have since been settled** — one flat `penaltyPoints: 2` for every kind of second chance. See Section 8.
 5. **Distractor choices** in MC modes prefer same-region states so the quiz teaches discrimination between neighbors.
-6. **Region groupings** in Section 5 are Scott-approved placeholders; teacher regions will be re-mapped by editing `region` integers only.
+6. **Region groupings** in Section 5 are approved placeholders; teacher regions will be re-mapped by editing `region` integers only.
 
-### Decided during the build (Phases 1-3), all Scott-approved unless noted
+### Decided during the build (Phases 1-3), all approved unless noted
 
 7. **Washington DC is drawn but inert.** It is on the map, because a US map without it looks wrong, but it is never a question, never tinted, and clicks pass straight through it. It is not in `states.js` and does not need to be.
 8. **Region colours:** each of the 10 regions gets its own colour rather than one shared highlight, so neighbouring picked regions never merge into one blob. The dot on each region checkbox is the map's key. All ten live as CSS variables in `style.css`.
@@ -716,7 +716,7 @@ ranked against a practice one. The high score table gains a mark on exam rows.
 13. **Wrong typed letters land in red and must be backspaced out**, and the **Skip button fades in** rather than being present from the first keystroke. Both are written up in Section 6.
 14. **The progress counter counts questions finished, not shown** — see Section 6.
 15. **One map instance, moved between screens** rather than one copy per screen, so no two elements ever share an `id`. Only one screen is visible at a time, so one map is enough.
-16. **The coin double-jump is an EASTER EGG, not a bug. Do not remove it.** Landing on a coin lets the player jump again, so holding the jump button bounces him along a line of coins. It happens because Arcade physics sets the `touching` flags during *overlap* checks as well as solid ones, so a coin underfoot reads as ground. It was unintended; Scott played it, liked it, and asked to keep it. Section 9's "no double-jump" still holds everywhere else. The line in `jump()` is commented, and a test guards it.
+16. **The coin double-jump is an EASTER EGG, not a bug. Do not remove it.** Landing on a coin lets the player jump again, so holding the jump button bounces him along a line of coins. It happens because Arcade physics sets the `touching` flags during *overlap* checks as well as solid ones, so a coin underfoot reads as ground. It was unintended; it was played, enjoyed, and deliberately kept. Section 9's "no double-jump" still holds everywhere else. The line in `jump()` is commented, and a test guards it.
 17. **No sound files (Phase 5).** The five effects are generated from notes in `js/audio.js` rather than shipped as `.ogg` files. See the note under Section 11 for why. Editing a sound means editing numbers, not opening an audio editor.
 18. **Art is separated from physics (Phase 5).** Every moving part in the runner is still the invisible box it was in Phase 4; sprites are drawn on top and follow along. This is deliberate and load-bearing — it is what lets artwork be swapped without re-testing the jump and hazard maths. Do not "simplify" it by giving the sprites their own physics bodies.
 19. ~~**Known limit for Phase 7:** `capitalAlternates` matching is built and working, but alternates of *different lengths* will break the dash display in Mode 5.~~ **FIXED in Phase 7, and it was bigger than this said.** The typing *check*, not just the display, worked from one answer — so typing the correct start of the shorter spelling was rejected as a mistake. Both now work from every spelling still matching what has been typed. See the Phase 7 note in Section 12.
@@ -731,8 +731,8 @@ ranked against a practice one. The high score table gains a mark on exam rows.
     Not more than 52vh: the state's name sits in a big box *above* the map in these modes, and at
     62vh the "Not that one, try again" line fell below the bottom of the window on an ordinary
     1366 x 768 laptop. The map looked splendid and the reply was invisible.
-21b. **The zoom panel, after the Gate 6 play test said the small states were too fiddly.** Scott
-    named the six: RI, MD, DE, CT, MA, NJ. Built as a second small map beside the first rather than
+21b. **The zoom panel, after the Gate 6 play test said the small states were too fiddly.** The six were
+    named: RI, MD, DE, CT, MA, NJ. Built as a second small map beside the first rather than
     as a magnifier drawn on the map itself, because there is nowhere on the map with room — the
     only empty space big enough is in the Atlantic, and a panel there covers Florida. Written up
     under Phase 6 in Section 12. The trade is that the main map is narrower during a click round;
@@ -746,7 +746,7 @@ ranked against a practice one. The high score table gains a mark on exam rows.
     because it started its stopwatch after a screenshot. The check was measuring itself, not the
     game — the kind of test bug `tests/README.md` warns about.
 
-### Decided during Phase 7 (flag to Scott if any of these is wrong)
+### Decided during Phase 7 (flag any of these if wrong)
 
 24. **The hint names the state, and modes 7 and 10 therefore do not have one.** Section 6 already
     listed hints for modes 4-6 and 8 only; this says *why*, so nobody "completes the set" later.
@@ -767,7 +767,7 @@ ranked against a practice one. The high score table gains a mark on exam rows.
     a build that no longer exists. The version literal now lives in `gate7.py`, the gate for the
     build that carries it, and each has a comment saying where it went.
 
-### Decided during Phase 8 (flag to Scott if any of these is wrong)
+### Decided during Phase 8 (flag any of these if wrong)
 
 29. **Exam typing is marked strictly on capital letters**, the same standard practice enforces —
     practice refuses a lowercase first letter outright, so accepting one in an exam would be a
@@ -776,7 +776,7 @@ ranked against a practice one. The high score table gains a mark on exam rows.
     Mode 8's two-letter codes are strict either way, which is that mode's whole point.
 30. **Skip is offered in all ten modes during an exam**, not just the typed ones as in practice. On
     a multiple-choice question it is the honest alternative to a wild guess — and a guess that
-    happens to land tells Scott the opposite of the truth, which defeats the point of the exam.
+    happens to land gives the opposite of the truth, which defeats the point of the exam.
 31. **The review screen groups by region.** Written up under Section 14; it is a deliberate
     departure from that section's "every question, in order".
 32. **The running score is hidden during an exam, not frozen or dashed out.** A visible total that

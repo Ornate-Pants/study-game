@@ -2,7 +2,7 @@
    SOUND - The sound effects, and the mute button
    ============================================================
 
-   Scott: there are NO sound files in this game. The five
+   There are NO sound files in this game. The five
    effects are made by the browser itself, from notes, at the
    moment they play.
 

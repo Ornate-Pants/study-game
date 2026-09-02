@@ -1020,7 +1020,7 @@ const Quiz = (function () {
 
   // Skip. Allowed in every mode during an exam, because on a picking
   // question it is the honest alternative to a wild guess - and a guess
-  // that happens to land would tell Scott the wrong thing. Unlike
+  // that happens to land would give a false picture. Unlike
   // practice it is final: nothing ever comes back.
   function skipExam() {
     if (!state.current || !state.exam) return;

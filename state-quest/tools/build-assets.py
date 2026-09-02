@@ -3,7 +3,7 @@
 BUILD-ASSETS  --  a one-time tool, NOT part of the game
 ============================================================
 
-Scott: you normally never need to run this. It has already
+You normally never need to run this. It has already
 been run, and the file it makes is sitting in
 assets/sprites/sprites-inline.js.
 

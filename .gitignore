@@ -2,7 +2,7 @@
 # What NOT to save into version history
 # ============================================================
 #
-# Scott: everything the game needs to RUN is committed, including
+# Note: everything the game needs to RUN is committed, including
 # lib/phaser.min.js and the generated assets/*-inline.js files.
 # There is no build step - you can clone this and double-click
 # index.html. That is deliberate.

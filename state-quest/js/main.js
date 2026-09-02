@@ -20,7 +20,7 @@
 /* ------------------------------------------------------------
    THE 10 MODES
 
-   Scott: "status" controls whether a mode can be picked.
+   "status" controls whether a mode can be picked.
      "ready" = playable now
      "soon"  = shown greyed out with a "Coming Soon" label
    To turn a mode on later, change one word. Nothing else.

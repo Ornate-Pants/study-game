@@ -51,7 +51,7 @@ def start(page, mode, exam=True, regions=(NEW_ENGLAND,), quick=True, debug=True)
     page.goto(URL + ("?debug=1" if debug else ""))
     page.wait_for_timeout(300)
     if quick:
-        # Config values, so turning them down is what Scott would do.
+        # Config values, so turning them down is an ordinary thing to do.
         page.evaluate("() => { CONFIG.skipDelaySeconds = 0.3;"
                       " CONFIG.hintDelaySeconds = 0.3; }")
     page.click("#start-button")

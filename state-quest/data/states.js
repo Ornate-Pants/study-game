@@ -2,7 +2,7 @@
    QUIZ DATA - The answer key
    ============================================================
 
-   Scott: this is the only file you change to teach a different
+   This is the only file you change to teach a different
    subject later (world capitals, presidents, whatever). The
    quiz engine reads everything from here plus config.js.
 

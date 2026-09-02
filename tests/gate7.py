@@ -41,9 +41,9 @@ def start(page, mode, regions=(NEW_ENGLAND,), debug=True, quick=True):
     """Open the game and get a round of `mode` under way. mode is 1-based.
 
     `quick` shortens the two fade-in waits. They are config values, so
-    turning them down is exactly what Scott would do - it is not the
-    test reaching past the game to poke at its insides. One check below
-    deliberately leaves them alone and waits the real 8 seconds.
+    turning them down is exactly what tuning the game would do - it is
+    not the test reaching past the game to poke at its insides. One check
+    below deliberately leaves them alone and waits the real 8 seconds.
     """
     page.goto(URL + ("?debug=1" if debug else ""))
     page.wait_for_timeout(300)

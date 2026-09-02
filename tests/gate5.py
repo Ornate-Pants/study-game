@@ -115,7 +115,7 @@ with sync_playwright() as p:
           repr(page.locator("#name-input").input_value()))
 
     total1 = int(page.locator("#results-total").inner_text())
-    page.fill("#name-input", "Paxton")
+    page.fill("#name-input", "Explorer")
     page.click("#save-score-button")
     page.wait_for_timeout(400)
 
@@ -138,7 +138,7 @@ with sync_playwright() as p:
     play_round(page)
     if page.locator("#name-entry").is_visible():
         check("the name box remembers the last name used",
-              page.locator("#name-input").input_value() == "Paxton",
+              page.locator("#name-input").input_value() == "Explorer",
               repr(page.locator("#name-input").input_value()))
         page.fill("#name-input", "Pa")
         page.click("#save-score-button")

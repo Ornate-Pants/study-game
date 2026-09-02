@@ -383,8 +383,8 @@ const Runner = (function () {
         // ONE EXCEPTION, AND IT IS DELIBERATE - LEAVE IT ALONE.
         // "touching.down" is set by overlap checks as well as by solid
         // ones, so a coin underfoot counts as ground and he can bounce
-        // off it for a second jump. That was an accident, Scott played
-        // it, liked it, and asked to keep it. It is an easter egg now.
+        // off it for a second jump. That was an accident; it was played,
+        // enjoyed, and deliberately kept. It is an easter egg now.
         // Tightening this to blocked.down only would remove it.
         if (!this.player.body.blocked.down && !this.player.body.touching.down) return;
 

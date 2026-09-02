@@ -295,7 +295,7 @@ with sync_playwright() as p:
         page.screenshot(path=str(SHOTS / "g4-pit-stun.png"))
 
     # ---- Phase 4B: the coin double-jump easter egg stays ----
-    # Deliberate (Scott asked to keep it). The mechanism is that Arcade
+    # Deliberate (kept on purpose). The mechanism is that Arcade
     # sets touching.down on OVERLAP as well as on solid collisions, so a
     # coin underfoot counts as ground. Guard the line itself, because the
     # risk is somebody "tidying" it away.

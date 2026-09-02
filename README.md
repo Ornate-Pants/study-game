@@ -1,6 +1,6 @@
 # State Quest
 
-A states-and-capitals study game for Paxton (grades 3–4).
+A states-and-capitals study game for a 3rd–4th grader.
 
 Two halves per round. **Answer questions** about US states to earn seconds, then spend those
 seconds in a **bonus runner** grabbing coins. Learning buys playing time.
