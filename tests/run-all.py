@@ -22,7 +22,9 @@ WHAT_EACH_ONE_COVERS = {
     3: "Modes 2 and 3, spelling, and the backspace limit",
     4: "the bonus runner: jumping, hazards, stuns, coins",
     5: "high scores, sound, artwork, and saving between visits",
-    6: "Mode 9, clicking the state on the map"
+    6: "Mode 9, clicking the state on the map",
+    7: "Modes 4-8 and 10: capitals, abbreviations, and the Hint button",
+    8: "Exam Mode: no feedback until the end, and the review screen"
 }
 
 

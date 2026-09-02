@@ -33,6 +33,8 @@ testing in the same browser Paxton plays in is the whole point.
 | **gate4** | the runner: jump height, hazard fairness, stuns, coins, the double-jump easter egg |
 | **gate5** | high scores, name entry, sound, artwork, and surviving a browser restart |
 | **gate6** | Mode 9: clicking the map, the zoom panel, and above all that the map never shows the answer |
+| **gate7** | Modes 4-8 and 10: the Hint button and its one flat cost, `ME` vs `me`, Saint Paul / St. Paul |
+| **gate8** | Exam Mode: that nothing marks an answer mid-round, the review screen, the doubled bonus |
 
 Screenshots and browser profiles are written to `tests/_output/`, which git ignores. Delete it
 whenever.
@@ -51,6 +53,12 @@ fixed time and then clicked failed about one run in three — not because the ga
 because the click landed in that gap. `gate6.py` waits for the state itself to change (and for
 gate 2's reveal timing, times from the reveal rather than from a few checks later). If a check
 here is flaky, look for a sleep before blaming the game.
+
+**`?debug=1` shows the answer, so some checks must not use it.** Every gate opens the game in debug
+mode, because that is what lets a check see inside the engine — but debug also prints the answer on
+screen on purpose. Gate 8's whole subject is that an exam never gives the answer away, so those
+particular checks open the game with no flag at all and read the page as Paxton would see it. A
+check about what is *visible* is worth nothing if it runs in the one mode built to reveal things.
 
 **Some checks are measurements, and measurements are fiddly.** The runner ones sample a moving
 game through a browser, and a few have had to be made more forgiving — taking the best of

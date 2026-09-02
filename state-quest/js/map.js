@@ -339,7 +339,7 @@ const USMap = (function () {
     zoom.setAttribute("class", "us-map us-map-zoom");
     zoom.setAttribute("viewBox", box.x + " " + box.y + " " + box.w + " " + box.h);
     zoom.setAttribute("role", "img");
-    zoom.setAttribute("aria-label", "The small north-eastern states, larger");
+    zoom.setAttribute("aria-label", "Northeast Cooridor - Zoomed in");
 
     // The neighbours go in a group of their own, which the stylesheet
     // draws a shade paler. Without it the panel is one flat sheet of

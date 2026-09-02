@@ -12,7 +12,7 @@
 
 const CONFIG = {
 
-  APP_VERSION: "1.1",        // Which build of the game this is. It is written down
+  APP_VERSION: "2.1",        // Which build of the game this is. It is written down
                              // HERE and nowhere else - the title screen reads it
                              // from this line, so bumping it here bumps it there.
 
@@ -25,7 +25,10 @@ const CONFIG = {
                              // very end (after the runner), not per question.
                              // 1 region = 10, 3 regions = 30, all 10 regions = 100.
 
-  hintDelaySeconds: 8,       // How many seconds before the "Hint" button fades in.
+  hintDelaySeconds: 8,       // How many seconds before the "Hint" button fades in. The
+                             // Hint button appears in the capital and abbreviation games
+                             // (Modes 4, 5, 6 and 8) and tells him WHICH state is lit up.
+                             // Using it costs penaltyPoints, below - the same as a skip.
 
   skipDelaySeconds: 5,       // How many seconds before the "Skip" button fades in on a
                              // spelling question. Bigger = he has to try for longer
@@ -53,6 +56,19 @@ const CONFIG = {
                              // next question appears. Bigger = slower and calmer.
 
   tooltipSeconds: 4,         // How long the "remember to capitalize" reminder stays up.
+
+  // --- Exam Mode -------------------------------------------
+  //
+  // Exam Mode is the tick-box on the Pick Your Regions screen. It can be
+  // turned on for ANY of the ten games. While it is on there are no hints,
+  // no second chances and no green or red at all until the round is over -
+  // he types or picks an answer, presses Submit, and finds out at the end.
+  // It is how you find out what he actually knows.
+
+  examBonusMultiplier: 2,    // The region bonus is multiplied by this in an exam,
+                             // because an exam is harder. 1 region normally earns
+                             // 10 at the end; in an exam it earns 20. It is still
+                             // added only ONCE, on the final score screen.
 
   zoomSmallStates: true,     // In the click-the-map games, show a second bigger map
                              // beside the first, holding the crowded north-eastern

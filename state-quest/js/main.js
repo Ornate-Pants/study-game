@@ -26,16 +26,16 @@
    To turn a mode on later, change one word. Nothing else.
    ------------------------------------------------------------ */
 const MODES = [
-  { id: 1,  name: "State Match",             blurb: "See a state. Pick its name.",            status: "ready" },
-  { id: 2,  name: "State Speller",           blurb: "See a state. Spell its name.",           status: "ready" },
-  { id: 3,  name: "State Speller: Hard",     blurb: "Spell it with no help at all.",          status: "ready" },
-  { id: 4,  name: "Capital Match",           blurb: "See a state. Pick its capital.",         status: "soon"  },
-  { id: 5,  name: "Capital Speller",         blurb: "See a state. Spell its capital.",        status: "soon"  },
-  { id: 6,  name: "Capital Speller: Hard",   blurb: "Spell the capital with no help.",        status: "soon"  },
-  { id: 7,  name: "Abbreviation Match",      blurb: "See a state. Pick its 2 letters.",       status: "soon"  },
-  { id: 8,  name: "Abbreviation Hard",       blurb: "Type the 2 letters yourself.",           status: "soon"  },
-  { id: 9,  name: "Find the State",          blurb: "Read a name. Click it on the map.",      status: "ready" },
-  { id: 10, name: "Find the Capital's State", blurb: "Read a capital. Click its state.",      status: "soon"  }
+  { id: 1,  name: "State Match",                  blurb: "See a state. Pick its name.",            status: "ready" },
+  { id: 2,  name: "State Speller",                blurb: "See a state. Spell its name.",           status: "ready" },
+  { id: 3,  name: "State Speller: Hard Mode",     blurb: "Spell it with no help at all.",          status: "ready" },
+  { id: 4,  name: "Capital Match",                blurb: "See a state. Pick its capital.",         status: "ready" },
+  { id: 5,  name: "Capital Speller",              blurb: "See a state. Spell its capital.",        status: "ready" },
+  { id: 6,  name: "Capital Speller: Hard Mode",   blurb: "Spell the capital with no help.",        status: "ready" },
+  { id: 7,  name: "Abbreviation Match",           blurb: "See a state. Pick its 2 letters.",       status: "ready" },
+  { id: 8,  name: "Abbreviation: Hard Mode",      blurb: "Type the 2 letters yourself.",           status: "ready" },
+  { id: 9,  name: "Find the State",               blurb: "Read a name. Click it on the map.",      status: "ready" },
+  { id: 10, name: "Find the Capital's State",     blurb: "Read a capital. Click its state.",      status: "ready" }
 ];
 
 const App = (function () {
@@ -43,6 +43,8 @@ const App = (function () {
   // ---- What the player has chosen so far this round ----
   let selectedMode = null;      // a MODES entry
   let selectedRegions = [];     // region numbers, e.g. [1, 4]
+  let examMode = false;         // is the next round an exam? (a switch that
+                                // works on any of the ten games)
   let quizPoints = 0;           // points from the quiz phase
   let coinPoints = 0;           // points from coins in the runner
   let lastTotal = 0;            // the finished score, for the high score list
@@ -153,6 +155,12 @@ const App = (function () {
       btn.disabled = !playable;
       btn.type = "button";
 
+      // Which mode this button is, so the stylesheet can put the last
+      // four somewhere particular. Where things SIT is a layout job and
+      // belongs in style.css, the same way colors do - this attribute
+      // is only the handle it needs to grab them by.
+      btn.dataset.mode = String(mode.id);
+
       const title = document.createElement("span");
       title.className = "mode-name";
       title.textContent = mode.id + ". " + mode.name;
@@ -251,9 +259,14 @@ const App = (function () {
     if (selectedRegions.length === 0) {
       summary.textContent = "Pick at least one region to start.";
     } else {
+      // An exam doubles the bonus, so the line has to say the number he
+      // will actually get - otherwise the results screen is a surprise.
+      const bonus = selectedRegions.length * CONFIG.regionBonusPerRegion
+        * (examMode ? CONFIG.examBonusMultiplier : 1);
+
       summary.textContent = questionCount + " questions"
-        + "  •  " + (selectedRegions.length * CONFIG.regionBonusPerRegion)
-        + " bonus points at the end";
+        + "  •  " + bonus + " bonus points at the end"
+        + (examMode ? "  •  Exam Mode" : "");
     }
 
     // Can't start a round with no regions picked.
@@ -299,7 +312,8 @@ const App = (function () {
 
     // Hand control to the quiz engine. It runs the whole round and calls
     // finishQuiz() when the last question is done.
-    Quiz.start(selectedMode.id, selectedRegions, finishQuiz);
+    Quiz.start(selectedMode.id, selectedRegions, finishQuiz,
+      { exam: examMode });
   }
 
   // The quiz engine calls this when the round is over.
@@ -311,8 +325,128 @@ const App = (function () {
       result.firstTryCount + " of " + result.totalCount;
     document.getElementById("summary-seconds").textContent = quizPoints;
 
+    // "on the first try" means nothing in an exam - there is no second
+    // try to tell it apart from.
+    document.getElementById("summary-title").textContent =
+      result.exam ? "Exam Finished" : "Nice Work!";
+    document.getElementById("summary-score-tail").textContent =
+      result.exam ? "right." : "right on the first try.";
+
+    // The review: the only place an exam marks anything.
+    renderReview(result);
+
     showScreen("summary");
     Sound.play("roundWin");
+  }
+
+  /* ==========================================================
+     THE EXAM REVIEW
+
+     Every question he answered, grouped under the region it
+     came from, with that region's score on the heading. The
+     grouping is the point: the per-region tally is what says
+     where to focus, and this puts each wrong answer directly
+     underneath the heading that counts it.
+     ========================================================== */
+
+  function renderReview(result) {
+    const panel = document.getElementById("exam-review");
+    const list = document.getElementById("review-list");
+
+    panel.hidden = !result.exam;
+    list.innerHTML = "";
+    if (!result.exam) return;
+
+    // Gather the questions under their region, keeping the order asked
+    // inside each one.
+    const byRegion = {};
+    result.record.forEach(function (item) {
+      (byRegion[item.region] = byRegion[item.region] || []).push(item);
+    });
+
+    Object.keys(byRegion)
+      .map(Number)
+      .sort(function (a, b) { return a - b; })
+      .forEach(function (regionNumber) {
+        const rows = byRegion[regionNumber];
+        const gotRight = rows.filter(function (r) { return r.right; }).length;
+
+        const group = document.createElement("div");
+        group.className = "review-group";
+
+        const heading = document.createElement("h4");
+        heading.className = "review-region";
+
+        const swatch = document.createElement("span");
+        swatch.className = "region-swatch region-swatch-" + regionNumber;
+        swatch.setAttribute("aria-hidden", "true");
+        heading.appendChild(swatch);
+
+        const label = document.createElement("span");
+        label.textContent = QUIZ_DATA.regions[String(regionNumber)];
+        heading.appendChild(label);
+
+        const tally = document.createElement("span");
+        tally.className = "review-tally";
+        tally.textContent = gotRight + " of " + rows.length;
+        heading.appendChild(tally);
+
+        group.appendChild(heading);
+        rows.forEach(function (row) {
+          group.appendChild(buildReviewRow(row));
+        });
+
+        list.appendChild(group);
+      });
+  }
+
+  // One question on the review screen.
+  function buildReviewRow(item) {
+    const row = document.createElement("div");
+    row.className = "review-row "
+      + (item.right ? "is-right" : (item.skipped ? "is-skipped" : "is-wrong"));
+
+    const mark = document.createElement("span");
+    mark.className = "review-mark";
+    mark.textContent = item.right ? "✓" : (item.skipped ? "–" : "✗");
+    row.appendChild(mark);
+
+    const body = document.createElement("span");
+    body.className = "review-body";
+
+    const question = document.createElement("span");
+    question.className = "review-question";
+    question.textContent = item.question;
+    body.appendChild(question);
+
+    const said = document.createElement("span");
+    said.className = "review-said";
+    if (item.skipped) {
+      said.textContent = "you skipped this one";
+    } else {
+      said.textContent = "you said " + item.given;
+    }
+    body.appendChild(said);
+
+    // The right answer, but only where he did not already write it.
+    if (!item.right) {
+      const answer = document.createElement("span");
+      answer.className = "review-answer";
+      answer.textContent = "answer: " + item.correct;
+      body.appendChild(answer);
+    }
+
+    // Right letters, wrong capitals. Worth saying out loud, or the two
+    // words look identical at a glance and the lesson is missed.
+    if (item.capitalOnly) {
+      const note = document.createElement("span");
+      note.className = "review-note";
+      note.textContent = "so close - check the capital letters";
+      body.appendChild(note);
+    }
+
+    row.appendChild(body);
+    return row;
   }
 
   function startRunner() {
@@ -332,7 +466,10 @@ const App = (function () {
   function showResults() {
     // The region bonus is added exactly ONCE, right here, after both
     // phases are done. It is never added during the quiz or the runner.
-    const regionBonus = selectedRegions.length * CONFIG.regionBonusPerRegion;
+    // An exam doubles it, and that doubling happens here too - in the
+    // one place the bonus is worked out, so it can never land twice.
+    const regionBonus = selectedRegions.length * CONFIG.regionBonusPerRegion
+      * (examMode ? CONFIG.examBonusMultiplier : 1);
     const total = quizPoints + coinPoints + regionBonus;
 
     document.getElementById("results-quiz").textContent = quizPoints;
@@ -345,6 +482,7 @@ const App = (function () {
         quizPoints: quizPoints,
         coinPoints: coinPoints,
         regions: selectedRegions.length,
+        exam: examMode,
         regionBonus: regionBonus,
         total: total
       });
@@ -395,6 +533,11 @@ const App = (function () {
       score: lastTotal,
       mode: selectedMode ? selectedMode.name : "Bonus Round",
       regions: selectedRegions.length,
+      // An exam score carries a doubled bonus, so it must never sit in
+      // the table looking like an ordinary one. Scores saved before this
+      // existed have no such field, which reads as false - so old rows
+      // keep working with nothing to convert.
+      exam: examMode,
       date: new Date().toLocaleDateString()
     };
 
@@ -446,9 +589,19 @@ const App = (function () {
       }
 
       [index + 1, entry.name, entry.score, entry.mode,
-       entry.regions, entry.date].forEach(function (value) {
+       entry.regions, entry.date].forEach(function (value, column) {
         const cell = document.createElement("td");
         cell.textContent = value;
+
+        // The Game column carries the exam marker, so a doubled-bonus
+        // score is never silently ranked against an ordinary one.
+        if (column === 3 && entry.exam) {
+          const tag = document.createElement("span");
+          tag.className = "exam-tag";
+          tag.textContent = "Exam";
+          cell.appendChild(tag);
+        }
+
         row.appendChild(cell);
       });
 
@@ -483,9 +636,21 @@ const App = (function () {
     selectedRegions = [];
     quizPoints = 0;
     coinPoints = 0;
+    // Exam Mode is switched off again with the regions. Starting an exam
+    // by accident, because the last round happened to be one, is not a
+    // mistake worth allowing.
+    setExamMode(false);
     setAllRegions(false);
     resetHistory();
     showScreen("mode-select", { skipHistory: true });
+  }
+
+  // The one place the exam switch is turned on or off, so the tick box
+  // and the flag can never disagree.
+  function setExamMode(on) {
+    examMode = !!on;
+    document.getElementById("exam-toggle").checked = examMode;
+    onRegionChange();     // the bonus on the summary line doubles or halves
   }
 
   /* ==========================================================
@@ -538,6 +703,11 @@ const App = (function () {
 
     document.getElementById("clear-regions-button")
       .addEventListener("click", function () { setAllRegions(false); });
+
+    document.getElementById("exam-toggle")
+      .addEventListener("change", function (event) {
+        setExamMode(event.target.checked);
+      });
 
     // Testing helper, only visible with ?debug=1.
     document.getElementById("end-round-button")

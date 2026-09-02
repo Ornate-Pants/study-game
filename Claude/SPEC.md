@@ -1,6 +1,6 @@
 # State Quest: States & Capitals Study Game
 ## Build Specification for Claude Code
-**Version:** 1.1 — shipped | **Owner:** Scott | **Player:** Paxton (grades 3-4)
+**Version:** 2.1 — built, awaiting Gate 8 | **Owner:** Scott | **Player:** Paxton (grades 3-4)
 
 ---
 
@@ -32,7 +32,7 @@ Educational goal: learn all 50 states and capitals, correct spelling included, b
 
 ## 3. File Structure
 
-As actually built through Phase 6 (v1.1 shipped). Files marked NEW were not in the original plan; why each exists is noted. Phase 6 added no files: Mode 9 and its zoom panel live in the `js/quiz.js` and `js/map.js` that were already there.
+As actually built through Phase 7 (v2.0). Files marked NEW were not in the original plan; why each exists is noted. Phases 6 and 7 added no files at all: Mode 9 and its zoom panel live in the `js/quiz.js` and `js/map.js` that were already there, and Phase 7's six new modes are six entries in `MODE_RULES` plus one Hint button — which is what Section 6's "the answer string is a parameter" was for.
 
 ```
 state-quest/
@@ -190,15 +190,28 @@ A hint and a second chance do not stack: a question that took *any* kind of seco
 | 1 | State Match | Highlighted state on map | Multiple choice, 4 state names (1 correct + 3 distractors drawn from the selected regions when possible, otherwise any state) | **v1.0** |
 | 2 | State Speller | Highlighted state on map | Type it. First letter shown, remaining letters as dashes that fill in as typed. Wrong letters flash red; backspace to fix. Skip button available. | **v1.0** |
 | 3 | State Speller: Hard | Highlighted state on map | Type it. NO first letter, NO dashes, no length hint. Doesn't advance until fully correct. Skip button available. | **v1.0** |
-| 4 | Capital Match | Highlighted state on map, prompt: "What is the capital?" | Multiple choice, 4 capitals. Hint button (reveals state name, 2-pt penalty). | v2.0 |
-| 5 | Capital Speller | Same prompt | Type capital, first letter + dashes. Hint button. Skip button. | v2.0 |
-| 6 | Capital Speller: Hard | Same prompt | Type capital, no hints shown. Hint button. Skip button. | v2.0 |
-| 7 | Abbreviation Match | Highlighted state on map | Multiple choice, 4 two-letter abbreviations. | v2.0 |
-| 8 | Abbreviation Hard | Highlighted state on map | Type the 2-letter abbreviation, exact capitalization required (e.g., "ME" not "me"). Hint button reveals full state name. Skip button. | v2.0 |
+| 4 | Capital Match | Highlighted state on map, prompt: "What is the capital?" | Multiple choice, 4 capitals. Hint button (reveals state name, 2-pt penalty). | **v2.0** |
+| 5 | Capital Speller | Same prompt | Type capital, first letter + dashes. Hint button. Skip button. | **v2.0** |
+| 6 | Capital Speller: Hard | Same prompt | Type capital, no hints shown. Hint button. Skip button. | **v2.0** |
+| 7 | Abbreviation Match | Highlighted state on map | Multiple choice, 4 two-letter abbreviations. | **v2.0** |
+| 8 | Abbreviation Hard | Highlighted state on map | Type the 2-letter abbreviation, exact capitalization required (e.g., "ME" not "me"). Hint button reveals full state name. Skip button. | **v2.0** |
 | 9 | Find the State | State NAME shown as text | Click the correct state on the map. Wrong click: that state flashes red, click again (2nd click = the second chance, then reveal + retire). | **v1.1** |
-| 10 | Find the Capital's State | Capital name shown as text | Click the state whose capital it is. Same click rules as Mode 9. | v2.0 |
+| 10 | Find the Capital's State | Capital name shown as text | Click the state whose capital it is. Same click rules as Mode 9. | **v2.0** |
 
-Mode-select screen shows all 10 with v2.0 ones grayed out and labeled "Coming Soon" so the UI doesn't need rework later.
+Mode-select screen shows all 10. **All ten are now playable** — the "Coming Soon" grey-out built in Phase 0 is still in `js/main.js` and is what Exam Mode's own additions would reuse; turning a mode on is still one word (`status`).
+
+**How the ten are laid out (Scott's call, after Gate 7).** Modes 1-6 fill the first two rows three across. The last four are pairs — 7 and 8 are the abbreviation games, 9 and 10 the click-the-map games — so each pair takes a row of its own in columns 1 and 3, with column 2 left empty:
+
+```
+    1   2   3
+    4   5   6
+    7   .   8
+    9   .  10
+```
+
+The gap down the middle is the point: it makes the last four read as two pairs rather than a run of four. It lives in `css/style.css` behind `@media (min-width: 860px)`, which is the narrowest the page can be and still fit three columns; below that the grid falls back to two columns and then one, and every button flows in order, because holes in a single column would just look broken. `js/main.js` gives each button a `data-mode` so the stylesheet has something to grab — placement is a layout job and stays out of the JavaScript.
+
+**Mode 7 has no Hint button, and that is deliberate** — Section 6 lists hints for modes 4-6 and 8 only. In Mode 7 the state is lit on the map and the four choices are abbreviations, so a hint naming the state gives away the answer outright. Mode 10 has none for the same reason, one step further: the state's name *is* what he is being asked to find.
 
 ---
 
@@ -273,7 +286,7 @@ const CONFIG = {
 
 Values added during the build, because Section 3 forbids hardcoding gameplay numbers and none of these behaviours had a home here: `skipDelaySeconds` and `backspacesPerQuestion` (Phase 3 / 5B), `feedbackSeconds` (Phase 2), the runner's world and timing values (Phases 4 and 5), and `jumpHoldSeconds` / `jumpShortFactor` / `pitChance` / `obstacleChance` (Phase 5B).
 
-**`examBonusMultiplier` is specified but not yet in `data/config.js`** — it arrives with Exam Mode in Phase 8 (Section 14). Everything else in this block is live.
+**`examBonusMultiplier` arrived in Phase 8** and is now in `data/config.js` with the rest. Every value in this block is live.
 
 **One penalty, one number (Scott's decision, replaces the old split rules).** There used to be two competing ideas — a hint penalty in points and a separate "half credit" formula for second chances — and they disagreed with each other and with the built config. They are now the same thing: **needing a second chance costs a flat `penaltyPoints` (2), however it happened.** Hint, skip-and-return, or right-on-the-second-pick all land a solved question on `5 - 2 = 3`.
 
@@ -359,7 +372,7 @@ Move him with the physics body's own reposition, not by setting the drawn shape'
 
 Claude Code should execute phase by phase and STOP at each gate for Scott to test in a browser before continuing. Each gate lists exactly what Scott checks.
 
-**Progress: Phases 0-6 and 5B are BUILT and have PASSED their gates. v1.0 and v1.1 are shipped and tagged. Remaining: Phase 7 (Modes 4-8 and 10, v2.0), Phase 8 (Exam Mode, v2.1 - see Section 14).**
+**Progress: Phases 0-7 and 5B are BUILT. v1.0 and v1.1 are shipped and tagged; Phase 7 (v2.0) passed its gate in play. Phase 8 is BUILT and its automated checks pass; it is waiting on GATE 8, Scott at a browser. That is every phase in this plan.**
 
 ### Phase 0: Scaffold (v1.0) — DONE, gate passed
 Project structure, `index.html` loading everything via script tags from `file://`, Phaser bundled locally, empty screen state machine (Title -> stub screens), config + full states data file (Appendix A).
@@ -439,13 +452,102 @@ Click-the-map mode: name shown as text prompt, SVG click handling, 2-click secon
 > each line is named for the two states it runs between (`ct-ma`), which is how the panel takes
 > only the ones it needs.
 
-### Phase 7: Modes 4-8 and 10 (v2.0)
+### Phase 7: Modes 4-8 and 10 (v2.0) — BUILT, awaiting gate
 Reuse engines: capital variants (4-6) = typed/MC engine pointed at `capital` + hint button; 7-8 = abbreviation variants with exact-capitalization rule; 10 = click engine pointed at capitals. Un-gray the mode select buttons.
 **GATE 7:** One round of each new mode; verify the hint costs the same 2 points a skip does, and that a hinted answer solved on the second pick is still 3 and not 1; verify "me" vs "ME" in Mode 8 triggers red + tooltip; verify capitalAlternates (Saint Paul / St. Paul) in Mode 5/6.
 
-### Phase 8: Exam Mode (v2.1)
+> **How it was built.** Six lines in `MODE_RULES` and no new files. The engine already
+> knew that the thing being asked for is a *field name*, so modes 4-6 are the existing
+> choice/typing engines with `asks: "capital"` and 7-8 with `asks: "abbr"`; Mode 10 is Mode 9's
+> line with one word changed, because the thing *clicked* is a state either way and the click is
+> still judged on `abbr`. Scoring, the queue, second chances and reveal-and-retire are the same
+> code all ten modes share.
+>
+> **Three things needed real work, and only one of them was foreseen.**
+>
+> **1. The Hint button, and the promise that penalties do not stack.** It lives in its own
+> `#quiz-helpers` box outside both answer areas, because it is offered in one multiple-choice mode
+> and three spelling ones. It hooks into scoring at a single point: `isSecondChance()` now begins
+> `if (state.usedHint) return true`. That is the whole implementation of Section 8's "one penalty,
+> one number" — hint, skip-and-return and right-on-the-second-pick all reach the same line, so
+> there is no arithmetic anywhere that could add two deductions together. A hinted question solved
+> on the second pick is 3.
+>
+> **What the hint says is the state's NAME**, never the answer: *"This state is Massachusetts."*
+> That is why modes 7 and 10 do not have one — see the note under Section 7.
+>
+> **2. Appendix B item 19 was real, and worse than it was written up.** The known limit said the
+> *dash display* would break on alternates of different lengths. The display was the smaller half.
+> The typing check compared each keystroke against **one** answer, so with "Saint Paul" on file,
+> typing `S` then `t` — the correct start of the accepted "St. Paul" — was rejected as a mistake.
+> The alternate could be reached only by guessing the longer spelling first.
+>
+> Everything about typing now works from **every spelling still alive**: the candidates that begin
+> with what has been typed. After `S` both `a` and `t` are correct next letters; after `St` one
+> spelling is left and the row shortens from 10 boxes to 8 to match. It narrows as he types, which
+> is also why the dash count is now a consequence of the rule rather than a second thing to keep in
+> step with it.
+>
+> **3. Mode 8 needed a capitalization rule the game did not have.** Section 6's rule is "the first
+> letter of each word", and by it `ME` and `Me` are both fine — which is exactly what Mode 8 must
+> refuse. The rule became a mode switch, `allCaps`, with its own wording, since telling a child to
+> capitalize *the first letter* is misleading advice about a word where both letters are capitals:
+> *"The 2 letters are BOTH capitals. It is ME, not Me or me."* Case is still ignored mid-word
+> everywhere else, so a stuck Caps Lock never costs anything.
+>
+> **A smaller one worth writing down:** in Mode 10 the reveal cannot just print the answer field,
+> or a missed question reads *"The answer is Boston."* when Boston was the question. It names the
+> state and ties the city back to it — *"The answer is Rhode Island, where Providence is the
+> capital."*
+>
+> `tests/gate7.py` covers all of the above; the full suite (gates 1-7) passes.
+
+### Phase 8: Exam Mode (v2.1) — BUILT, awaiting gate
 The switch described in Section 14, for all built modes: no hints, no second chances, and no feedback of any kind during the round. Backspace stays available and free, because with the letter-by-letter checking off there is nothing left to cheat against. Submit-based answering, the end-of-round review screen with per-question marks and a per-region tally, doubled region bonus, and an exam marker on high score rows.
 **GATE 8:** Scott plays an exam round and confirms nothing gives the answer away mid-round; the review screen matches what was actually answered; the per-region tally adds up; the doubled bonus lands once on the results screen; an exam high score is marked as one.
+
+> **How it was built.** No new modes and no new screens. `Quiz.start()` gained a fourth argument
+> carrying `{ exam: true }`, and everything that follows from it lives in one section of
+> `js/quiz.js` headed EXAM MODE. The rule held throughout: **a practice round runs through exactly
+> the same lines it always did** — exam behaviour is branches placed alongside the Phase 3 and
+> Phase 7 code, never edits to it.
+>
+> **"No feedback" is a bigger claim than it looks, and that was the real work.** The colours are
+> the obvious part. The rest:
+>
+> - **The running score is feedback.** A total that climbs when you get one right tells you that
+>   you got it right. `#hud-points` is hidden for the whole round and an EXAM marker takes its
+>   place; the number is still kept underneath, so the summary and the tests can read it.
+> - **The sounds are feedback**, so none of them play.
+> - **The pause between questions is feedback** — `feedbackSeconds` exists only to hold the green
+>   flash. An exam submits and moves straight on.
+> - **The letter-by-letter checking is feedback in its purest form.** This is the one Section 14
+>   warned about, and it is why the spelling engine is not adapted for exams but switched off
+>   entirely and replaced with an ordinary `<input>`.
+>
+> And one thing that is *not* feedback and had to be protected: **the lit-up state in Modes 1-8 and
+> the name or city read out in Modes 9-10.** Those are the question. Taking them away leaves
+> nothing to answer.
+>
+> **The trap that would have broken it.** `handleKey` is a document-level listener that calls
+> `preventDefault()` on every printable key — correct when letters are being checked one at a time,
+> and fatal next to a text box, which would have silently refused to accept a single character. In
+> an exam `handleKey` hands over to `handleExamKey` before reaching any of that; only Enter and the
+> 1-4 shortcuts are wired, and every other key is left to the box. `gate8.py` types with real
+> keystrokes rather than `fill()` specifically so this cannot regress unnoticed.
+>
+> **Answering is two steps in all three engines** — put something down, then Submit — so he can
+> change his mind, and so typing, picking and clicking all end at the same function. A chosen
+> answer is marked in **blue** (`is-chosen`), deliberately outside the green/red vocabulary the
+> game has spent three phases teaching.
+>
+> **What the review screen needed.** Section 14 flagged that the engine does not remember what the
+> player actually *answered*, only whether he was right. `state.record` now holds one entry per
+> question — what was asked, what he said, what was right, and whether it was skipped — and is
+> handed to `main.js` at the end. `main.js` draws it, because `quiz.js` owns the rules and
+> `main.js` owns the screens.
+>
+> `tests/gate8.py` covers all of it; the full suite (gates 1-8) passes.
 
 ---
 
@@ -498,11 +600,18 @@ Skip is permitted, but there is no second chance. The question is marked "skippe
 Shown when the last question is submitted, before the bonus round. It is the only place any
 answer is marked.
 
-- **Every question, in order**, marked ✓, ✗ or "Skipped", showing what he answered and — where
+- **Every question**, marked ✓, ✗ or "Skipped", showing what he answered and — where
   he was wrong — the right answer. A skipped question shows the right answer with a blank where
   his would have been.
 - **A per-region tally**, which is what tells Scott where to focus:
   *"Great Lakes 5/5 · New England 3/5 · Pacific 4/5"*.
+
+> **Built grouped by region, not "in order" as this section first said** (Scott's call, Phase 8).
+> Each region is a heading carrying its own tally, with its questions underneath. The reason for
+> the change is the reason the tally exists: it is there to say where to focus, and grouping puts
+> every wrong answer directly under the heading that counts it. A ten-region exam is fifty rows,
+> and in one flat list the four he got wrong are scattered through it. Order *within* each region
+> is still the order he answered them.
 - Then **"Start Bonus Round!"** as usual. Quiz points still become running seconds, so the
   exam still earns playing time.
 
@@ -610,7 +719,7 @@ ranked against a practice one. The high score table gains a mark on exam rows.
 16. **The coin double-jump is an EASTER EGG, not a bug. Do not remove it.** Landing on a coin lets the player jump again, so holding the jump button bounces him along a line of coins. It happens because Arcade physics sets the `touching` flags during *overlap* checks as well as solid ones, so a coin underfoot reads as ground. It was unintended; Scott played it, liked it, and asked to keep it. Section 9's "no double-jump" still holds everywhere else. The line in `jump()` is commented, and a test guards it.
 17. **No sound files (Phase 5).** The five effects are generated from notes in `js/audio.js` rather than shipped as `.ogg` files. See the note under Section 11 for why. Editing a sound means editing numbers, not opening an audio editor.
 18. **Art is separated from physics (Phase 5).** Every moving part in the runner is still the invisible box it was in Phase 4; sprites are drawn on top and follow along. This is deliberate and load-bearing — it is what lets artwork be swapped without re-testing the jump and hazard maths. Do not "simplify" it by giving the sprites their own physics bodies.
-19. **Known limit for Phase 7:** `capitalAlternates` matching is built and working, but alternates of *different lengths* will break the dash display in Mode 5 — "Saint Paul" is 10 characters and "St. Paul" is 8. The dashes will need to key off whichever candidate still matches what has been typed. No state name has an alternate, so Modes 2 and 3 are unaffected.
+19. ~~**Known limit for Phase 7:** `capitalAlternates` matching is built and working, but alternates of *different lengths* will break the dash display in Mode 5.~~ **FIXED in Phase 7, and it was bigger than this said.** The typing *check*, not just the display, worked from one answer — so typing the correct start of the shorter spelling was rejected as a mistake. Both now work from every spelling still matching what has been typed. See the Phase 7 note in Section 12.
 
 ### Decided during Phase 6
 
@@ -636,3 +745,56 @@ ranked against a practice one. The high score table gains a mark on exam rows.
     the full set for this phase; gate 2's reveal-pause check had been failing on a good build
     because it started its stopwatch after a screenshot. The check was measuring itself, not the
     game — the kind of test bug `tests/README.md` warns about.
+
+### Decided during Phase 7 (flag to Scott if any of these is wrong)
+
+24. **The hint names the state, and modes 7 and 10 therefore do not have one.** Section 6 already
+    listed hints for modes 4-6 and 8 only; this says *why*, so nobody "completes the set" later.
+    In Mode 7 the state is lit on the map and the answers are abbreviations, so naming it hands
+    over the answer. In Mode 10 the state's name is what he is being asked to find.
+25. **Mode 8 needed a second capitalization rule**, `allCaps`, because Section 6's "first letter of
+    each word" accepts `Me` for `ME`. It has its own wording too — telling a child to capitalize
+    *the first letter* is misleading advice about a two-capital word. Case is still ignored
+    mid-word in every other mode, so a stuck Caps Lock never costs points anywhere.
+26. **Mode 8 is a "hard" mode all through: no dashes and no first letter.** Two dashes would say
+    "the answer is two letters long", which is true of every abbreviation in the game and so tells
+    him nothing — but it would make the screen look like Mode 5's, which is a different promise.
+27. **The reveal in Mode 10 names the state, not the answer field** — *"The answer is Rhode Island,
+    where Providence is the capital."* Printing the field alone reads as *"The answer is
+    Providence"*, which was the question.
+28. **`gate6.py`'s two Phase-6 assertions were retired, not deleted.** It checked the version was
+    literally `1.1` and that modes 4-8 and 10 still said "Coming Soon" — both true statements about
+    a build that no longer exists. The version literal now lives in `gate7.py`, the gate for the
+    build that carries it, and each has a comment saying where it went.
+
+### Decided during Phase 8 (flag to Scott if any of these is wrong)
+
+29. **Exam typing is marked strictly on capital letters**, the same standard practice enforces —
+    practice refuses a lowercase first letter outright, so accepting one in an exam would be a
+    *lower* bar than the training. But where capitalisation is the only difference, the review row
+    says so in words rather than leaving him to spot it: *"so close — check the capital letters."*
+    Mode 8's two-letter codes are strict either way, which is that mode's whole point.
+30. **Skip is offered in all ten modes during an exam**, not just the typed ones as in practice. On
+    a multiple-choice question it is the honest alternative to a wild guess — and a guess that
+    happens to land tells Scott the opposite of the truth, which defeats the point of the exam.
+31. **The review screen groups by region.** Written up under Section 14; it is a deliberate
+    departure from that section's "every question, in order".
+32. **The running score is hidden during an exam, not frozen or dashed out.** A visible total that
+    climbs is feedback as surely as a green flash. An EXAM marker takes its place in the HUD, so he
+    always knows which kind of round he is in.
+33. **Exam Mode switches itself off on Play Again**, alongside the regions. Starting an exam by
+    accident, because the last round happened to be one, is not a mistake worth allowing.
+34. **High score rows record `exam: true`; older saved scores have no such field**, which reads as
+    false. Nothing needed converting and old rows still display correctly.
+35. **Two bugs found in Phase 7's own gate suite while running the full set** — both in the test,
+    not the game, which is the split `tests/README.md` warns to expect.
+    - `gate7.py` asked "is the Hint button there yet?" in the middle of a round, which raced a
+      shortened 0.3s hint timer against a 1s green flash with about 50ms to spare. It passed on a
+      quiet machine and failed on a busy one. It now asks on a freshly started round, and waits for
+      the button rather than sleeping a guessed amount.
+    - `gate7.py` read `Quiz.getState().current.abbr` directly after solving Minnesota. The engine
+      correctly drops `current` to null when a round ends, so whenever the shuffle put Minnesota
+      last — about one run in five — the check threw instead of failing. Both spots now go through
+      the suite's own `here()` helper, which handles the null.
+    The lesson is the one already written down: **if a failure looks impossible, suspect the check
+    before the game.**

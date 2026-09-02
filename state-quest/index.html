@@ -77,6 +77,20 @@
     <!-- main.js fills this in from the region list in data/states.js -->
     <div id="region-list" class="region-list"></div>
 
+    <!-- EXAM MODE. A switch, not a game: it can be turned on for any of
+         the ten. It lives here, right before the round starts, so the
+         choice is made at the last moment. -->
+    <label class="exam-toggle" id="exam-toggle-label">
+      <input type="checkbox" id="exam-toggle">
+      <span class="exam-toggle-text">
+        <strong>Exam Mode</strong>
+        <span class="exam-toggle-blurb">
+          No hints and no second tries. You find out how you did at the end
+          &mdash; and the bonus points are doubled.
+        </span>
+      </span>
+    </label>
+
     <!-- The live map preview. js/map.js drops the map in here. -->
     <div id="region-map-preview" class="map-frame"></div>
 
@@ -90,7 +104,13 @@
        Phase 3 adds the typing box to this same screen. -->
   <section class="screen" id="screen-quiz">
     <div class="hud">
-      <span class="hud-item">Points: <strong id="hud-points">0</strong></span>
+      <!-- The running score. HIDDEN during an exam: a total that climbs
+           when you get one right is feedback, and an exam has none. -->
+      <span class="hud-item" id="hud-points-item">Points: <strong id="hud-points">0</strong></span>
+
+      <!-- Takes the score's place during an exam, so it is never a
+           surprise which kind of round this is. -->
+      <span class="hud-item hud-exam" id="hud-exam" hidden>EXAM</span>
 
       <!-- Backspaces left on this question. Spelling modes only;
            js/quiz.js fills it in and hides it for the other modes. -->
@@ -114,7 +134,7 @@
     <div class="quiz-map-row">
       <div id="quiz-map" class="map-frame"></div>
       <div id="quiz-zoom" class="map-frame zoom-frame" hidden>
-        <p class="zoom-label">The small states, bigger</p>
+        <p class="zoom-label">Northeastern Corridor - Zoom </p>
       </div>
     </div>
 
@@ -132,6 +152,41 @@
       </button>
     </div>
 
+    <!-- THE EXAM TYPING BOX. In an exam the letter-by-letter engine
+         above is switched off completely, because a letter turning red
+         IS feedback. What is left is an ordinary text box: type your
+         best answer, backspace as much as you like, press Submit. -->
+    <div id="quiz-exam-typing" class="exam-typing" hidden>
+      <input type="text" id="exam-input" class="exam-input"
+             autocomplete="off" autocorrect="off" autocapitalize="off"
+             spellcheck="false" aria-label="Type your answer">
+    </div>
+
+    <!-- Submit and Skip for an exam. Outside the answer areas because
+         they serve all three ways of answering - typing, picking a
+         button and clicking the map - exactly like the Hint button. -->
+    <div id="quiz-exam-actions" class="exam-actions" hidden>
+      <button type="button" id="exam-submit" class="big-button" disabled>
+        Submit
+      </button>
+      <button type="button" id="exam-skip" class="small-button skip-button" hidden>
+        Skip this one
+      </button>
+    </div>
+
+    <!-- The Hint button, and the name it reveals (Modes 4, 5, 6, 8).
+         Those modes light up a state and ask for something that is NOT
+         its name, so the hint tells him WHICH state he is looking at.
+         It costs the same 2 points a skip does. It sits outside the
+         two answer areas above because it is offered in both a
+         multiple-choice mode and three spelling ones. -->
+    <div id="quiz-helpers" class="quiz-helpers" hidden>
+      <button type="button" id="quiz-hint" class="small-button hint-button" hidden>
+        Hint
+      </button>
+      <p id="quiz-hint-name" class="hint-name" hidden></p>
+    </div>
+
     <!-- Messages like "The answer is Vermont." This box keeps its
          height even when empty so nothing jumps around on screen. -->
     <p id="quiz-feedback" class="quiz-feedback">&nbsp;</p>
@@ -143,18 +198,29 @@
     </button>
   </section>
 
-  <!-- ========== ROUND SUMMARY ========== -->
+  <!-- ========== ROUND SUMMARY ==========
+       After an exam this same screen also carries the review: the ONLY
+       place in an exam where any answer is marked. main.js fills it in. -->
   <section class="screen" id="screen-summary">
-    <h2>Nice Work!</h2>
+    <h2 id="summary-title">Nice Work!</h2>
     <p class="lead">
       You earned <strong id="summary-points">0</strong> points.
     </p>
     <p class="lead">
-      You got <strong id="summary-firsttry">0 of 0</strong> right on the first try.
+      <span id="summary-score-label">You got</span>
+      <strong id="summary-firsttry">0 of 0</strong>
+      <span id="summary-score-tail">right on the first try.</span>
     </p>
     <p class="lead">
       That is <strong id="summary-seconds">0</strong> seconds of running time!
     </p>
+
+    <!-- The exam review. Hidden after a practice round. -->
+    <div id="exam-review" class="exam-review" hidden>
+      <h3 class="review-title">How you did</h3>
+      <div id="review-list" class="review-list"></div>
+    </div>
+
     <p class="lead">Now go grab some coins!</p>
     <button type="button" id="start-runner-button" class="big-button">Start Bonus Round!</button>
   </section>

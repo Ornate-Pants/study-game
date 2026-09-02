@@ -201,9 +201,8 @@ with sync_playwright() as p:
           page.locator("#version-tag").inner_text() ==
           "v" + page.evaluate("() => CONFIG.APP_VERSION"),
           page.locator("#version-tag").inner_text())
-    check("the version is 1.1",
-          page.evaluate("() => CONFIG.APP_VERSION") == "1.1",
-          page.evaluate("() => CONFIG.APP_VERSION"))
+    # The version LITERAL belongs to gate7 now, which is the gate for the
+    # build that carries it. Here it only has to be consistent with itself.
 
     page.click("#start-button")
     page.wait_for_timeout(200)
@@ -217,8 +216,9 @@ with sync_playwright() as p:
     check("Mode 9 is no longer Coming Soon",
           mode9.is_enabled() and not soon(MODE_9 - 1),
           mode9.inner_text().replace("\n", " "))
-    check("Modes 4-8 and 10 are still Coming Soon",
-          all(soon(i) for i in [3, 4, 5, 6, 7, 9]))
+    # This used to read "Modes 4-8 and 10 are still Coming Soon". Phase 7
+    # built them, so the thing worth checking flipped over: nothing is
+    # locked any more. gate7 checks that in full.
 
     # ============ 2. The map must NOT give the answer away ============
     start(page, MODE_9)
@@ -400,8 +400,11 @@ with sync_playwright() as p:
 
     check("the zoom panel is on screen in a click round",
           page.locator("#quiz-zoom .us-map-zoom").count() == 1)
+    # The label was reworded after Gate 7 ("The small states, bigger" ->
+    # "Northeastern Corridor - Zoom"). What matters is that the panel says
+    # what it is for, not the exact words.
     check("it says what it is",
-          "bigger" in page.locator(".zoom-label").inner_text().lower(),
+          "zoom" in page.locator(".zoom-label").inner_text().lower(),
           page.locator(".zoom-label").inner_text())
     check("it holds all six of the small states",
           all(page.locator(f'.us-map-zoom [data-abbr="{a}"]').count() == 1

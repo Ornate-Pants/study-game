@@ -31,18 +31,33 @@
 
    BUILT SO THE OTHER MODES CAN REUSE IT:
    the thing being asked for is a FIELD NAME, never the word
-   "name" typed into the logic. Mode 1 asks for "name",
-   Mode 4 will ask for "capital", Mode 7 for "abbr", and the
+   "name" typed into the logic. Modes 1-3 ask for "name",
+   Modes 4-6 for "capital", Modes 7-8 for "abbr", and the
    scoring, the queue and the second-chance rules do not
    change at all.
 
    THREE WAYS TO ANSWER, one engine behind all of them:
-     "choices"   Mode 1        pick one of four buttons
-     "typing"    Modes 2, 3    spell it out letter by letter
-     "mapClick"  Mode 9        click the state on the map
+     "choices"   Modes 1, 4, 7      pick one of four buttons
+     "typing"    Modes 2, 3, 5, 6, 8  spell it out letter by letter
+     "mapClick"  Modes 9, 10        click the state on the map
 
-   Still to come:
-     Phase 7  Modes 4-8 and 10 (capitals and abbreviations)
+   All ten modes are built. Every one of them is a line in the
+   MODE_RULES table below and nothing else - which is the whole
+   point of the table.
+
+   EXAM MODE (Phase 8) is a SWITCH, not an eleventh mode. It can
+   be turned on for any of the ten, and while it is on this file
+   behaves almost oppositely:
+
+     no hints, no second chances, nothing requeued,
+     no green, no red, no sound, no reveal, no running score
+     - he types or picks, presses Submit, and finds out at the
+       end on the review screen.
+
+   Everything exam-related lives in the one section headed
+   EXAM MODE below. The practice code above it is untouched by
+   any of it: the rule is that a practice round runs through
+   exactly the same lines it always did.
    ============================================================ */
 
 const Quiz = (function () {
@@ -54,6 +69,15 @@ const Quiz = (function () {
      "answerWith" is how they produce it.
      Adding a mode later means adding a line here, not
      rewriting the engine.
+
+     The other switches, all optional:
+       showFirstLetter  start the word off with its first letter
+       showDashes       show a dash for every letter still to come
+       hint             offer the Hint button, which names the state
+       allCaps          every letter must be a capital (Mode 8's
+                        abbreviations - "ME", never "Me" or "me")
+       showsTargetText  the question is READ, because the map is
+                        the answer sheet and must give nothing away
      ========================================================== */
   const MODE_RULES = {
     1: {
@@ -75,6 +99,51 @@ const Quiz = (function () {
       showDashes: false,        // and no clue how long the word is
       prompt: "Spell the state that is lit up. No hints this time!"
     },
+
+    /* --- The capitals (Phase 7). Same three engines, pointed at the
+           "capital" field instead of "name". The map still lights the
+           state up, so the question is "which city belongs to THIS
+           shape" - and the Hint button names the shape. --- */
+    4: {
+      asks: "capital",
+      answerWith: "choices",
+      hint: true,
+      prompt: "What is the capital of the state that is lit up?"
+    },
+    5: {
+      asks: "capital",
+      answerWith: "typing",
+      showFirstLetter: true,
+      showDashes: true,
+      hint: true,
+      prompt: "Spell the capital of the state that is lit up."
+    },
+    6: {
+      asks: "capital",
+      answerWith: "typing",
+      showFirstLetter: false,
+      showDashes: false,
+      hint: true,
+      prompt: "Spell the capital. No letters to help you this time!"
+    },
+
+    /* --- The two-letter codes (Phase 7). Mode 8 is the one place in
+           the game where EVERY letter has to be a capital. --- */
+    7: {
+      asks: "abbr",
+      answerWith: "choices",
+      prompt: "Which 2 letters stand for the state that is lit up?"
+    },
+    8: {
+      asks: "abbr",
+      answerWith: "typing",
+      showFirstLetter: false,
+      showDashes: false,
+      allCaps: true,
+      hint: true,
+      prompt: "Type the 2 letters for the state that is lit up."
+    },
+
     9: {
       asks: "name",
       answerWith: "mapClick",
@@ -82,15 +151,29 @@ const Quiz = (function () {
       // anything up. The question is read instead, in big letters.
       showsTargetText: true,
       prompt: "Find this state on the map."
+    },
+
+    // Mode 10 is Mode 9 with one word changed. The thing READ OUT is
+    // the capital; the thing CLICKED is still a state, and the click is
+    // still judged on the state's abbr - so none of the code below
+    // needed to learn anything new.
+    10: {
+      asks: "capital",
+      answerWith: "mapClick",
+      showsTargetText: true,
+      prompt: "Which state has this capital city? Find it on the map."
     }
-    // Phase 7 adds:  4 to 8, and 10 (the same mapClick as above, but
-    //                asking for "capital" instead of "name")
   };
 
   // Shown when a letter is right but typed in lowercase where a
   // capital belongs. Wording comes straight from the spec.
   const CAPITAL_TOOLTIP =
     "Remember to capitalize the first letter of states or cities.";
+
+  // Mode 8 only. An abbreviation is capitals the whole way through, so
+  // the "first letter of the word" wording above would be misleading.
+  const ALLCAPS_TOOLTIP =
+    "The 2 letters are BOTH capitals. It is ME, not Me or me.";
 
   // Everything about the round in progress lives here.
   let state = {
@@ -106,6 +189,7 @@ const Quiz = (function () {
     resolvedCount: 0,  // how many questions are FINISHED with, for good
     totalCount: 0,     // how many questions the round started with
     firstTryCount: 0,  // how many were solved on their first appearance
+    usedHint: false,   // was the Hint button used on THIS question?
 
     // --- only used while a spelling question is on screen ---
     answers: [],       // every spelling that counts as correct
@@ -114,7 +198,17 @@ const Quiz = (function () {
     backspacesLeft: 0, // fixes left on this question before it is skipped
 
     // --- only used while a click-the-map question is on screen ---
-    wrongClicks: []    // states already clicked and already refused
+    wrongClicks: [],   // states already clicked and already refused
+
+    // --- Exam Mode ---
+    exam: false,       // is this round an exam?
+    chosen: null,      // his answer so far, NOT yet submitted. An option
+                       // string in the picking modes, a state code in the
+                       // clicking ones. Typed answers live in the text box.
+    record: []         // one entry per question, in the order asked. This
+                       // is what the review screen is built from, and it
+                       // is the only place the game remembers what he
+                       // actually ANSWERED rather than whether he was right.
   };
 
   // Called when the round is over. main.js supplies it.
@@ -166,8 +260,12 @@ const Quiz = (function () {
 
   // main.js calls this to hand over control. It gets the round
   // back through whenFinished(), once the last question is done.
-  function start(modeId, regions, whenFinished) {
+  // options.exam turns the whole round into an exam - see the
+  // EXAM MODE section further down.
+  function start(modeId, regions, whenFinished, options) {
     cancelTimers();
+
+    const exam = !!(options && options.exam);
 
     const rules = MODE_RULES[modeId];
     if (!rules) {
@@ -194,14 +292,25 @@ const Quiz = (function () {
       questionNumber: 0,
       totalCount: states.length,
       firstTryCount: 0,
+      usedHint: false,
       answers: [],
       typed: "",
       pendingWrong: "",
       backspacesLeft: 0,
-      wrongClicks: []
+      wrongClicks: [],
+      exam: exam,
+      chosen: null,
+      record: []
     };
 
     onRoundEnd = whenFinished;
+
+    // The running score is FEEDBACK - a total that climbs when you get
+    // one right tells you that you got it right. So an exam hides it and
+    // puts a marker there instead. The number is still kept underneath;
+    // it is simply not shown until the round is over.
+    el("hud-points-item").hidden = exam;
+    el("hud-exam").hidden = !exam;
 
     // Click-the-map modes get more room for the map, because they have
     // no answer buttons underneath it. A bigger map means Rhode Island
@@ -218,7 +327,8 @@ const Quiz = (function () {
         mode: modeId,
         asking_for: rules.asks,
         regions: regions,
-        questions: state.totalCount
+        questions: state.totalCount,
+        exam: exam
       });
     }
 
@@ -263,9 +373,11 @@ const Quiz = (function () {
     state.pendingWrong = "";
     state.backspacesLeft = CONFIG.backspacesPerQuestion;
     state.wrongClicks = [];
+    state.usedHint = false;
 
     updateHud();
     drawBackspaces();
+    setupHint();
     clearFeedback();
     hideTooltip();
 
@@ -287,14 +399,21 @@ const Quiz = (function () {
       say("Let's try this one again!");
     }
 
-    // Show the one answer area this mode uses, and hide the other two.
+    // Show the one answer area this mode uses, and hide the others.
+    // A spelling question has TWO of them: the letter boxes for
+    // practice, and a plain text box for an exam. Never both.
     const typing = (state.rules.answerWith === "typing");
     const clicking = isMapClick();
+
     el("quiz-choices").hidden = typing || clicking;
-    el("quiz-typing").hidden = !typing;
+    el("quiz-typing").hidden = !typing || state.exam;
+    el("quiz-exam-typing").hidden = !typing || !state.exam;
+    el("quiz-exam-actions").hidden = !state.exam;
     el("quiz-target").hidden = !clicking;
 
-    if (typing) {
+    if (state.exam) {
+      askExam();
+    } else if (typing) {
       askWithTyping();
     } else if (clicking) {
       askWithMapClick();
@@ -308,8 +427,8 @@ const Quiz = (function () {
     return !!(state.rules && state.rules.answerWith === "mapClick");
   }
 
-  // Mode 1: four buttons, one right answer.
-  // Phase 3 will add askWithTyping() next to this.
+  // Modes 1, 4 and 7: four buttons, one right answer. Which field the
+  // buttons are filled from is the only difference between the three.
   function askWithChoices() {
     const field = state.rules.asks;
     const correct = state.current[field];
@@ -335,7 +454,16 @@ const Quiz = (function () {
       text.textContent = option;
       btn.appendChild(text);
 
-      btn.addEventListener("click", function () { judgePick(btn, option); });
+      // The same four buttons serve practice and exams. In practice a
+      // click is judged on the spot; in an exam it only SELECTS, and
+      // nothing is judged until Submit.
+      btn.addEventListener("click", function () {
+        if (state.exam) {
+          chooseOption(btn, option);
+        } else {
+          judgePick(btn, option);
+        }
+      });
       list.appendChild(btn);
     });
   }
@@ -378,10 +506,14 @@ const Quiz = (function () {
   }
 
   /* ==========================================================
-     MODE 9: FINDING IT ON THE MAP
+     MODES 9 AND 10: FINDING IT ON THE MAP
 
-     The name is READ, and the answer is given by clicking the
-     right shape. The map is deliberately left blank, because a
+     Something is READ - a state's name in Mode 9, a capital
+     city in Mode 10 - and the answer is given by clicking the
+     right shape. Either way the thing clicked is a STATE, so
+     both modes are judged on the state's abbr and the code
+     below does not know or care which of the two it is
+     running. The map is deliberately left blank, because a
      lit-up state would be the answer.
 
      The two chances work exactly like multiple choice: the
@@ -438,16 +570,13 @@ const Quiz = (function () {
     Sound.play("correct");
 
     const gained = awardPoints();
-
-    say(isSecondChance()
-      ? "Right on the second try. +" + gained + " points"
-      : "Yes! +" + gained + " points");
+    say(solvedMessage(gained));
 
     later(CONFIG.feedbackSeconds, nextQuestion);
   }
 
   /* ==========================================================
-     MODES 2 AND 3: SPELLING IT OUT
+     MODES 2, 3, 5, 6 AND 8: SPELLING IT OUT
 
      How the typing works:
        - Only the correct next letter moves the word along.
@@ -458,7 +587,18 @@ const Quiz = (function () {
          to fail a word by typing; a word ends either spelled
          or skipped.
        - The first letter of each word must be a capital. That
-         is the one place where upper and lower case matter.
+         is the one place where upper and lower case matter -
+         except in Mode 8, where an abbreviation is capitals
+         the whole way through.
+
+     TWO SPELLINGS AT ONCE (Phase 7). "Saint Paul" and
+     "St. Paul" are both right, and they are not the same
+     length. So nothing below ever works from ONE answer: it
+     works from every spelling that still matches what has
+     been typed, and the field narrows as he types. After "S"
+     both an "a" and a "t" are correct next letters; after
+     "St" only one spelling is left and the row of dashes
+     shortens from 10 boxes to 8 to match.
      ========================================================== */
 
   function askWithTyping() {
@@ -482,13 +622,22 @@ const Quiz = (function () {
     });
   }
 
-  // The spelling the player is working towards. With alternates,
-  // it is whichever one still matches what has been typed so far.
+  // Every spelling still in the running: the ones that begin with what
+  // has been typed so far. Usually just one. Two, briefly, when a state
+  // has an alternate spelling and he has not yet typed the letter that
+  // decides between them.
+  function liveAnswers() {
+    const alive = state.answers.filter(startsWithTyped);
+    // Never hand back an empty list. If nothing matches (which the
+    // typing rules should make impossible) the first answer is the one
+    // the screen falls back to, rather than nothing at all.
+    return alive.length ? alive : [state.answers[0]];
+  }
+
+  // The spelling being drawn on screen right now: whichever live one
+  // comes first. What the dashes are counted from.
   function targetAnswer() {
-    const alive = state.answers.filter(function (candidate) {
-      return startsWithTyped(candidate);
-    });
-    return alive.length ? alive[0] : state.answers[0];
+    return liveAnswers()[0];
   }
 
   function startsWithTyped(candidate) {
@@ -499,6 +648,18 @@ const Quiz = (function () {
   // the only letters where a capital is required.
   function isWordStart(answer, position) {
     return position === 0 || answer.charAt(position - 1) === " ";
+  }
+
+  // Does the letter at this position HAVE to be a capital?
+  // Two rules: Mode 8's abbreviations are capitals all through, and
+  // everywhere else it is the first letter of each word. Either way,
+  // only where the answer really does have a capital sitting there.
+  function mustBeCapital(candidates, position, wanted) {
+    if (wanted === wanted.toLowerCase()) return false;
+    if (state.rules.allCaps) return true;
+    return candidates.some(function (candidate) {
+      return isWordStart(candidate, position);
+    });
   }
 
   // Draw the letter boxes. Mode 2 shows a dash for every letter still
@@ -568,30 +729,38 @@ const Quiz = (function () {
       return;
     }
 
-    const answer = targetAnswer();
+    const candidates = liveAnswers();
     const position = state.typed.length;
-    const wanted = answer.charAt(position);
 
-    if (letter === wanted) {
-      acceptLetter(letter, answer);
+    // Every letter that would keep at least one spelling alive. Nearly
+    // always one letter; two while "Saint Paul" and "St. Paul" are both
+    // still possible.
+    const wanted = candidates
+      .map(function (candidate) { return candidate.charAt(position); })
+      .filter(function (character) { return character !== ""; });
+
+    if (wanted.indexOf(letter) !== -1) {
+      acceptLetter(letter);
       return;
     }
 
-    // Right letter, wrong case, at the start of a word: this is the
-    // capitalization lesson, so say so instead of just buzzing.
-    const rightLetterWrongCase =
-      letter.toLowerCase() === wanted.toLowerCase();
+    // The right letter in the wrong case.
+    const sameLetter = wanted.filter(function (character) {
+      return character.toLowerCase() === letter.toLowerCase();
+    });
 
-    if (rightLetterWrongCase && isWordStart(answer, position)) {
-      rejectLetter(letter);
-      showTooltip(CAPITAL_TOOLTIP);
-      return;
-    }
+    if (sameLetter.length) {
+      // Where a capital belongs, this is the whole lesson - so say so
+      // instead of just buzzing at him.
+      if (mustBeCapital(candidates, position, sameLetter[0])) {
+        rejectLetter(letter);
+        showTooltip(state.rules.allCaps ? ALLCAPS_TOOLTIP : CAPITAL_TOOLTIP);
+        return;
+      }
 
-    // Anywhere else, case does not matter. A stuck Caps Lock should
-    // not punish him for spelling the word correctly.
-    if (rightLetterWrongCase) {
-      acceptLetter(wanted, answer);
+      // Anywhere else, case does not matter. A stuck Caps Lock should
+      // not punish him for spelling the word correctly.
+      acceptLetter(sameLetter[0]);
       return;
     }
 
@@ -603,13 +772,18 @@ const Quiz = (function () {
   // a space in Mode 2. (Mode 3 has no dashes, so he does type it.)
   function absorbSpaces() {
     if (!state.rules.showDashes) return;
-    const answer = targetAnswer();
-    while (answer.charAt(state.typed.length) === " ") {
+    // Only step over a gap that EVERY live spelling agrees is a gap.
+    // Otherwise a free space could rule out a spelling he was heading
+    // for. (Nothing in the data does this today; it costs nothing to
+    // be right about it.)
+    while (liveAnswers().every(function (candidate) {
+      return candidate.charAt(state.typed.length) === " ";
+    })) {
       state.typed += " ";
     }
   }
 
-  function acceptLetter(letter, answer) {
+  function acceptLetter(letter) {
     state.typed += letter;
     absorbSpaces();
     drawLetters();
@@ -703,9 +877,7 @@ const Quiz = (function () {
     hideTooltip();
 
     const gained = awardPoints();
-    say(state.isRevisit
-      ? "Got it the second time! +" + gained + " points"
-      : "Yes! +" + gained + " points");
+    say(solvedMessage(gained));
 
     later(CONFIG.feedbackSeconds, nextQuestion);
   }
@@ -717,6 +889,7 @@ const Quiz = (function () {
 
     hideTooltip();
     el("quiz-skip").hidden = true;
+    hideHintButton();
 
     if (state.isRevisit) {
       revealAndRetire();
@@ -729,6 +902,289 @@ const Quiz = (function () {
     say("No problem - this one comes back later.");
     logMath(0);
     later(CONFIG.feedbackSeconds, nextQuestion);
+  }
+
+  /* ==========================================================
+     EXAM MODE
+
+     One rule runs this whole section: NOTHING ON SCREEN MAY
+     SAY WHETHER HE IS RIGHT until the round is over. That is
+     more places than it sounds. The colours are the obvious
+     one, but the sounds are feedback, the running score is
+     feedback, the pause before the next question is there only
+     to show a green flash, and the letter-by-letter checking
+     built in Phase 3 is feedback in its purest form - a letter
+     turning red tells him he is wrong. So in an exam the
+     spelling engine is switched off completely and replaced by
+     an ordinary text box.
+
+     What is NOT feedback, and must stay: the lit-up state in
+     Modes 1-8, and the name or city read out in Modes 9-10.
+     Those are the QUESTION. Taking them away would leave
+     nothing to answer.
+
+     Answering is in two steps everywhere - put something down,
+     then Submit - so he can change his mind, and so all three
+     ways of answering end at the same place.
+     ========================================================== */
+
+  function askExam() {
+    state.chosen = null;
+    setSubmitEnabled(false);
+    offerExamSkip();
+
+    if (state.rules.answerWith === "typing") {
+      const box = el("exam-input");
+      box.value = "";
+      box.focus();
+      return;
+    }
+
+    if (isMapClick()) {
+      // Same as practice: the map cannot show the question, so it is read.
+      el("quiz-target").textContent = state.current[state.rules.asks];
+      USMap.showZoom(el("quiz-zoom"));
+      USMap.setClickable(true, chooseState);
+      return;
+    }
+
+    // The picking modes reuse the practice buttons exactly; only what a
+    // click DOES is different, and that is decided in askWithChoices.
+    askWithChoices();
+  }
+
+  // Picked one of the four buttons. This marks it as HIS ANSWER and says
+  // nothing about whether it is right - a different look entirely from
+  // the green and red of a practice round.
+  function chooseOption(button, option) {
+    const buttons = el("quiz-choices").querySelectorAll(".choice-button");
+    for (let i = 0; i < buttons.length; i++) {
+      buttons[i].classList.remove("is-chosen");
+    }
+    button.classList.add("is-chosen");
+
+    state.chosen = option;
+    setSubmitEnabled(true);
+  }
+
+  // Clicked a state. Only one can be picked at a time, so the map is
+  // wiped first - which also takes the last pick off it.
+  function chooseState(abbr) {
+    if (!state.current || !state.exam) return;
+
+    USMap.clearAll();
+    USMap.setLook(abbr, "is-chosen");
+
+    state.chosen = abbr;
+    setSubmitEnabled(true);
+  }
+
+  // Typing in the box. The box itself is never checked or corrected;
+  // this only decides whether there is anything to submit.
+  function onExamTyping() {
+    if (!state.current || !state.exam) return;
+    setSubmitEnabled(el("exam-input").value.trim() !== "");
+  }
+
+  // What he has put down, as words.
+  function examAnswer() {
+    if (state.rules.answerWith === "typing") {
+      return el("exam-input").value.trim();
+    }
+    if (isMapClick()) {
+      // He clicked a shape; the answer he gave is that state's name.
+      return state.chosen ? stateName(state.chosen) : "";
+    }
+    return state.chosen || "";
+  }
+
+  function stateName(abbr) {
+    const found = QUIZ_DATA.items.filter(function (item) {
+      return item.abbr === abbr;
+    });
+    return found.length ? found[0].name : abbr;
+  }
+
+  // Submit. Marks it in silence, writes it down, and moves straight on -
+  // no pause, because the pause in a practice round exists only to hold
+  // the green flash, and there is no flash here.
+  function submitExam() {
+    if (!state.current || !state.exam) return;
+
+    const given = examAnswer();
+    if (given === "") return;   // nothing put down; Skip is the way out
+
+    writeDown(given, false);
+    nextQuestion();
+  }
+
+  // Skip. Allowed in every mode during an exam, because on a picking
+  // question it is the honest alternative to a wild guess - and a guess
+  // that happens to land would tell Scott the wrong thing. Unlike
+  // practice it is final: nothing ever comes back.
+  function skipExam() {
+    if (!state.current || !state.exam) return;
+
+    writeDown("", true);
+    nextQuestion();
+  }
+
+  // Mark one question and write down what happened. This is the only
+  // place an exam scores anything: full marks or nothing, because there
+  // is no second chance to take penaltyPoints off.
+  function writeDown(given, skipped) {
+    let right = false;
+    let capitalOnly = false;
+
+    if (!skipped) {
+      if (isMapClick()) {
+        // Judged on the state code, exactly as a practice click is.
+        right = (state.chosen === state.current.abbr);
+      } else if (state.rules.answerWith === "typing") {
+        // Every accepted spelling, capitals and all. Practice REFUSES a
+        // lowercase first letter outright, so an exam holding the same
+        // line is the same standard, not a harsher one.
+        right = state.answers.indexOf(given) !== -1;
+
+        // Right letters, wrong capitals. Still wrong - but the review
+        // screen says which kind of wrong, so it is a lesson and not a
+        // mystery.
+        if (!right) {
+          capitalOnly = state.answers.some(function (candidate) {
+            return candidate.toLowerCase() === given.toLowerCase();
+          });
+        }
+      } else {
+        right = (given === state.current[state.rules.asks]);
+      }
+    }
+
+    if (right) {
+      state.points += CONFIG.basePoints;
+      state.firstTryCount++;
+    }
+
+    state.record.push({
+      abbr: state.current.abbr,
+      region: state.current.region,
+      question: examQuestion(),
+      correct: examCorrect(),
+      given: skipped ? "" : given,
+      skipped: !!skipped,
+      right: right,
+      capitalOnly: capitalOnly
+    });
+
+    retire();
+    logMath(right ? CONFIG.basePoints : 0);
+  }
+
+  // The question as it appeared on screen. Modes 1-8 lit a state up, so
+  // that state IS the question; Mode 9 read out a name and Mode 10 a city.
+  function examQuestion() {
+    return isMapClick()
+      ? state.current[state.rules.asks]
+      : state.current.name;
+  }
+
+  // What a right answer looks like. In the clicking modes the thing to
+  // find is a STATE - even in Mode 10, where the question was a city.
+  function examCorrect() {
+    return isMapClick()
+      ? state.current.name
+      : state.current[state.rules.asks];
+  }
+
+  function setSubmitEnabled(on) {
+    el("exam-submit").disabled = !on;
+  }
+
+  // Skip fades in after a few seconds, the same as it does in practice,
+  // so a question gets a real try before giving up is on offer.
+  function offerExamSkip() {
+    const skip = el("exam-skip");
+    skip.hidden = true;
+    skip.classList.remove("is-showing");
+
+    // Noted now, checked when the wait is over: answer quickly and this
+    // would otherwise appear on the NEXT question, already counted down.
+    const askedAt = state.resolvedCount;
+
+    later(CONFIG.skipDelaySeconds, function () {
+      if (state.resolvedCount !== askedAt) return;
+      skip.hidden = false;
+      later(0.01, function () { skip.classList.add("is-showing"); });
+    });
+  }
+
+  /* ==========================================================
+     THE HINT BUTTON (Modes 4, 5, 6 and 8)
+
+     Those four modes light a state up and then ask for
+     something that is NOT its name - its capital city, or its
+     two letters. So the hint is the state's NAME. It tells him
+     where he is standing, not what the answer is.
+
+     It costs the flat penaltyPoints, exactly what a skip or a
+     second pick costs, and the three of them never stack: a
+     question that needed help of any kind is worth
+     basePoints - penaltyPoints and no less. Hinting and then
+     getting it on the second pick is still 3, not 1.
+     ========================================================== */
+
+  function setupHint() {
+    const button = el("quiz-hint");
+    const name = el("quiz-hint-name");
+    const holder = el("quiz-helpers");
+
+    name.hidden = true;
+    name.textContent = "";
+    hideHintButton();
+
+    // Only the four modes that ask for something other than the name -
+    // and never in an exam, which is the whole point of an exam.
+    holder.hidden = !state.rules.hint || state.exam;
+    if (!state.rules.hint || state.exam) return;
+
+    // Out of sight for a few seconds first, so the question gets a real
+    // try before help is on offer. Same idea as the Skip button.
+    //
+    // The count of finished questions is noted now and checked when the
+    // wait is over: answer this one quickly and the button would
+    // otherwise pop up during the green flash, offering help with a
+    // question that is already over.
+    const askedAt = state.resolvedCount;
+
+    later(CONFIG.hintDelaySeconds, function () {
+      if (state.usedHint || state.resolvedCount !== askedAt) return;
+      button.hidden = false;
+      // A tick later, so the browser notices and fades it in.
+      later(0.01, function () { button.classList.add("is-showing"); });
+    });
+  }
+
+  function hideHintButton() {
+    const button = el("quiz-hint");
+    button.hidden = true;
+    button.classList.remove("is-showing");
+  }
+
+  function useHint() {
+    // Nothing being asked, no hint in this mode, or already used.
+    if (!state.current || !state.rules.hint || state.usedHint) return;
+
+    state.usedHint = true;
+    hideHintButton();
+
+    const name = el("quiz-hint-name");
+    name.textContent = "This state is " + state.current.name + ".";
+    name.hidden = false;
+
+    if (CONFIG.debug) {
+      console.log("[quiz] hint used on " + state.current.abbr
+        + " - this question is now worth "
+        + Math.max(0, CONFIG.basePoints - CONFIG.penaltyPoints));
+    }
   }
 
   /* ==========================================================
@@ -750,12 +1206,39 @@ const Quiz = (function () {
     }
   }
 
-  // Was this the player's second and last chance at this question?
-  // Multiple choice counts picks; spelling counts appearances.
+  // Did this question need a second chance? That is the one thing the
+  // scoring asks, and it means the same however it happened:
+  //   - the Hint button was used                      (Modes 4-6, 8)
+  //   - the word was skipped and has come back        (typed modes)
+  //   - it took more than one pick or click           (choices, map)
+  // They do NOT stack. Any of them, or all of them, costs the same
+  // single penaltyPoints - which is what keeps a hinted-then-second-pick
+  // answer worth 3 instead of a punishing 1.
   function isSecondChance() {
+    if (state.usedHint) return true;
+
     return (state.rules.answerWith === "typing")
       ? state.isRevisit
       : (state.attempts > 1);
+  }
+
+  // What to say when he gets it, worded for how he got there.
+  function solvedMessage(gained) {
+    if (!isSecondChance()) return "Yes! +" + gained + " points";
+    if (state.usedHint) return "Got it with a hint. +" + gained + " points";
+    if (state.isRevisit) return "Got it the second time! +" + gained + " points";
+    return "Right on the second try. +" + gained + " points";
+  }
+
+  // The answer, said out loud. In the click modes the thing to find is
+  // a STATE - even in Mode 10, where the question was a city - so the
+  // state is the thing named, and the city is tied back to it.
+  function answerText() {
+    if (isMapClick() && state.rules.asks !== "name") {
+      return state.current.name + ", where "
+        + state.current[state.rules.asks] + " is the capital";
+    }
+    return state.current[state.rules.asks];
   }
 
   // Add up the points for a solved question. Shared by every mode:
@@ -782,6 +1265,9 @@ const Quiz = (function () {
   // it back after this.
   function retire() {
     state.resolvedCount++;
+    // Nothing left to hint at. The name it revealed stays up through
+    // the flash, because it is part of the answer being shown.
+    hideHintButton();
     updateHud();
   }
 
@@ -793,10 +1279,7 @@ const Quiz = (function () {
     lockChoices();
 
     const gained = awardPoints();
-
-    say(isSecondChance()
-      ? "Right on the second try. +" + gained + " points"
-      : "Yes! +" + gained + " points");
+    say(solvedMessage(gained));
 
     later(CONFIG.feedbackSeconds, nextQuestion);
   }
@@ -835,8 +1318,6 @@ const Quiz = (function () {
   // Out of chances: show the right answer for a moment, score nothing,
   // and never ask this one again. Used by both kinds of mode.
   function revealAndRetire() {
-    const correct = state.current[state.rules.asks];
-
     Sound.play("wrong");
     USMap.setLook(state.current.abbr, "is-correct");
 
@@ -848,7 +1329,7 @@ const Quiz = (function () {
       USMap.showRing(state.current.abbr);
     }
 
-    say("The answer is " + correct + ".");
+    say("The answer is " + answerText() + ".");
 
     retire();
     logMath(0);
@@ -887,7 +1368,13 @@ const Quiz = (function () {
     const holder = el("hud-backspaces");
     if (!holder) return;
 
-    const typing = state.rules && state.rules.answerWith === "typing";
+    // Never in an exam: backspace is unlimited and free there, because
+    // with the letter-by-letter checking off there is nothing left to
+    // cheat against. A counter would only be a thing to worry about.
+    const typing = state.rules
+      && state.rules.answerWith === "typing"
+      && !state.exam;
+
     holder.hidden = !typing;
     if (!typing) return;
 
@@ -962,7 +1449,18 @@ const Quiz = (function () {
     el("quiz-skip").hidden = true;
     el("quiz-typing").hidden = true;
     el("quiz-target").hidden = true;
+    el("quiz-helpers").hidden = true;
+    el("quiz-hint-name").hidden = true;
     el("hud-backspaces").hidden = true;
+    hideHintButton();
+
+    // The exam bits, and the running score put back for next time.
+    el("quiz-exam-typing").hidden = true;
+    el("quiz-exam-actions").hidden = true;
+    el("exam-input").value = "";
+    el("exam-skip").hidden = true;
+    el("hud-exam").hidden = true;
+    el("hud-points-item").hidden = false;
     document.body.classList.remove("is-map-click");
     hideTooltip();
     clearFeedback();
@@ -973,7 +1471,8 @@ const Quiz = (function () {
     if (CONFIG.debug) {
       console.log("[quiz] round finished:", {
         points: state.points,
-        firstTry: state.firstTryCount + " of " + state.totalCount
+        firstTry: state.firstTryCount + " of " + state.totalCount,
+        exam: state.exam
       });
     }
 
@@ -981,7 +1480,12 @@ const Quiz = (function () {
       onRoundEnd({
         points: state.points,
         firstTryCount: state.firstTryCount,
-        totalCount: state.totalCount
+        totalCount: state.totalCount,
+        // After an exam this is what the review screen is drawn from.
+        // It is empty after a practice round, which never records
+        // answers because it marks them as it goes.
+        exam: state.exam,
+        record: state.record.slice()
       });
     }
   }
@@ -1007,6 +1511,16 @@ const Quiz = (function () {
     // Leave browser shortcuts (Ctrl+R and friends) alone.
     if (event.ctrlKey || event.altKey || event.metaKey) return;
 
+    // EXAM MODE takes a different route entirely. It has to: the
+    // practice handler below calls preventDefault() on every printable
+    // key, which is right when the letters are being checked one at a
+    // time - and fatal in an exam, where the answer goes into an
+    // ordinary text box that must be left alone to do its job.
+    if (state.exam) {
+      handleExamKey(event);
+      return;
+    }
+
     if (state.rules.answerWith === "typing") {
       handleTypingKey(event);
     } else if (isMapClick()) {
@@ -1016,6 +1530,20 @@ const Quiz = (function () {
     } else {
       handleChoiceKey(event);
     }
+  }
+
+  // In an exam only two things are wired to the keyboard: Enter submits,
+  // and on a picking question 1-4 still choose a button. Every other key
+  // is left alone so the text box can have it.
+  function handleExamKey(event) {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      submitExam();
+      return;
+    }
+
+    if (state.rules.answerWith !== "choices") return;
+    handleChoiceKey(event);
   }
 
   // Modes 1, 4, 7: the number keys pick an answer.
@@ -1048,6 +1576,16 @@ const Quiz = (function () {
   document.addEventListener("keydown", handleKey);
   document.getElementById("quiz-skip")
     .addEventListener("click", skipQuestion);
+  document.getElementById("quiz-hint")
+    .addEventListener("click", useHint);
+
+  // --- Exam Mode wiring ---
+  document.getElementById("exam-submit")
+    .addEventListener("click", submitExam);
+  document.getElementById("exam-skip")
+    .addEventListener("click", skipExam);
+  document.getElementById("exam-input")
+    .addEventListener("input", onExamTyping);
 
   // Read-only peek at the round state, used by the HUD and by tests.
   function getState() {
