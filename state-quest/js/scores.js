@@ -16,9 +16,22 @@
 const Scores = (function () {
 
   // The names of the "drawers" in the browser's storage box.
-  const KEY_SCORES = "stateQuest.highScores";
+  //
+  // EACH GAME KEEPS ITS OWN HIGH SCORES, in its own drawer. A spelling
+  // round and a states round are not the same thing and were never
+  // comparable, so one table holding both would only ever be confusing.
+  //
+  // The US game keeps the old drawer name on purpose: scores saved
+  // before there was a second game are still in it, and renaming it
+  // would throw them away for no reason at all.
   const KEY_NAME   = "stateQuest.lastName";
   const KEY_MUTED  = "stateQuest.muted";
+
+  function scoresKey(gameId) {
+    return (gameId === "states" || !gameId)
+      ? "stateQuest.highScores"
+      : "studyGame." + gameId + ".highScores";
+  }
 
   /* --- Low-level read/write, safe if storage is unavailable --- */
 
@@ -41,9 +54,9 @@ const Scores = (function () {
 
   /* --- High score list --- */
 
-  // Returns an array of score entries, best first. Empty array if none.
-  function loadScores() {
-    const raw = readRaw(KEY_SCORES);
+  // Returns one game's score entries, best first. Empty array if none.
+  function loadScores(gameId) {
+    const raw = readRaw(scoresKey(gameId));
     if (!raw) return [];
     try {
       const parsed = JSON.parse(raw);
@@ -56,18 +69,19 @@ const Scores = (function () {
 
   // Adds one score, keeps only the best CONFIG.highScoreCount, saves.
   // entry = { name, score, mode, regions, date }
-  function saveScore(entry) {
-    const list = loadScores();
+  function saveScore(gameId, entry) {
+    const list = loadScores(gameId);
     list.push(entry);
     list.sort(function (a, b) { return b.score - a.score; });
     const trimmed = list.slice(0, CONFIG.highScoreCount);
-    writeRaw(KEY_SCORES, JSON.stringify(trimmed));
+    writeRaw(scoresKey(gameId), JSON.stringify(trimmed));
     return trimmed;
   }
 
-  // Would this score make the top 10? Used to decide on name entry.
-  function isHighScore(score) {
-    const list = loadScores();
+  // Would this score make that game's top 10? Used to decide on
+  // name entry.
+  function isHighScore(gameId, score) {
+    const list = loadScores(gameId);
     if (list.length < CONFIG.highScoreCount) return true;
     return score > list[list.length - 1].score;
   }
@@ -92,10 +106,10 @@ const Scores = (function () {
     writeRaw(KEY_MUTED, muted ? "true" : "false");
   }
 
-  // Wipes saved scores. Only used by the debug tools for now.
-  function clearScores() {
+  // Wipes one game's saved scores. Only used by the debug tools.
+  function clearScores(gameId) {
     try {
-      window.localStorage.removeItem(KEY_SCORES);
+      window.localStorage.removeItem(scoresKey(gameId));
     } catch (e) { /* nothing to do */ }
   }
 

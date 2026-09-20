@@ -15,6 +15,7 @@ letter-by-letter checking are all feedback too.
 """
 import sys
 from playwright.sync_api import sync_playwright
+from browser import launch_args, is_noise
 from pathlib import Path
 
 # Where the game is, worked out from where THIS file is, so the
@@ -33,6 +34,20 @@ GREAT_LAKES = 5      # holds Minnesota, the only state with an alternate
 
 problems = []
 console = []
+
+
+def wait_for_runner(page, ms=15000):
+    """Wait until the bonus round is actually running.
+
+    Phaser needs a moment to boot, and how long depends entirely on the
+    machine - on a slow one it is well past any sleep worth writing. A
+    fixed wait here meant the round was ended before there was a round
+    to end, the results screen was never reached, and every check after
+    it failed for a reason that had nothing to do with it.
+    tests/README.md says it plainly: wait for the thing, do not sleep a
+    guessed amount.
+    """
+    page.wait_for_function("() => Runner.isRunning()", timeout=ms)
 
 
 def check(label, ok, detail=""):
@@ -54,7 +69,7 @@ def start(page, mode, exam=True, regions=(NEW_ENGLAND,), quick=True, debug=True)
         # Config values, so turning them down is an ordinary thing to do.
         page.evaluate("() => { CONFIG.skipDelaySeconds = 0.3;"
                       " CONFIG.hintDelaySeconds = 0.3; }")
-    page.click("#start-button")
+    page.click('.game-button[data-game="states"]')
     page.locator("#mode-list button").nth(mode - 1).click()
     page.wait_for_timeout(200)
     for i in regions:
@@ -198,7 +213,7 @@ def answer_click(page):
 
 
 with sync_playwright() as p:
-    browser = p.chromium.launch(channel="chrome")
+    browser = p.chromium.launch(**launch_args())
     page = browser.new_page(viewport={"width": 1280, "height": 1100})
     page.on("console", lambda m: console.append(m.type + ": " + m.text))
     page.on("pageerror", lambda e: problems.append("pageerror: " + str(e)))
@@ -212,13 +227,13 @@ with sync_playwright() as p:
     check("the title screen shows the version",
           page.locator("#version-tag").inner_text() == "v" + cfg["APP_VERSION"],
           page.locator("#version-tag").inner_text())
-    check("the version is 2.1", cfg["APP_VERSION"] == "2.1", cfg["APP_VERSION"])
+    check("the version is 3.0", cfg["APP_VERSION"] == "3.0", cfg["APP_VERSION"])
     check("examBonusMultiplier is here now, and it is 2",
           cfg.get("examBonusMultiplier") == 2,
           str(cfg.get("examBonusMultiplier")))
 
     # ============ 2. The switch, on Pick Your Regions ============
-    page.click("#start-button")
+    page.click('.game-button[data-game="states"]')
     page.locator("#mode-list button").nth(0).click()
     page.wait_for_timeout(250)
 
@@ -395,10 +410,10 @@ with sync_playwright() as p:
 
     play_out(page, answer_typed)
     check("the skipped question was never asked again",
-          [r["abbr"] for r in record(page)].count(skipped_abbr) == 1,
-          str([r["abbr"] for r in record(page)]))
+          [r["key"] for r in record(page)].count(skipped_abbr) == 1,
+          str([r["key"] for r in record(page)]))
     check("every question appears exactly once",
-          len(record(page)) == 5 and len(set(r["abbr"] for r in record(page))) == 5)
+          len(record(page)) == 5 and len(set(r["key"] for r in record(page))) == 5)
 
     # ============ 5. The review screen ============
     check("the review is shown", page.locator("#exam-review").is_visible())
@@ -555,9 +570,12 @@ with sync_playwright() as p:
           quiz_points == 10 * FULL, str(quiz_points))
 
     page.click("#start-runner-button")
-    page.wait_for_timeout(1200)
+    wait_for_runner(page)
     page.evaluate("() => Runner.endNow()")
-    page.wait_for_timeout(900)
+    # ...and wait for the results screen rather than guessing how long
+    # the runner's "Time!" pause takes on this machine.
+    page.wait_for_selector("#screen-results.is-active", timeout=15000)
+    page.wait_for_timeout(200)
 
     bonus = int(page.locator("#results-bonus").inner_text())
     coins = int(page.locator("#results-coins").inner_text())
@@ -599,9 +617,12 @@ with sync_playwright() as p:
         pg.locator(f'.choice-button[data-answer="{answer(pg)}"]').click(),
         pg.wait_for_timeout(1250)))
     page.click("#start-runner-button")
-    page.wait_for_timeout(1200)
+    wait_for_runner(page)
     page.evaluate("() => Runner.endNow()")
-    page.wait_for_timeout(900)
+    # ...and wait for the results screen rather than guessing how long
+    # the runner's "Time!" pause takes on this machine.
+    page.wait_for_selector("#screen-results.is-active", timeout=15000)
+    page.wait_for_timeout(200)
     if not page.locator("#name-entry").is_hidden():
         page.fill("#name-input", "Practiser")
         page.click("#save-score-button")
@@ -622,7 +643,7 @@ with sync_playwright() as p:
 
     small.goto(URL + "?debug=1")
     small.wait_for_timeout(300)
-    small.click("#start-button")
+    small.click('.game-button[data-game="states"]')
     small.locator("#mode-list button").nth(0).click()    # Mode 1, quickest
     small.wait_for_timeout(200)
     small.click("#pick-all-button")
@@ -709,7 +730,8 @@ with sync_playwright() as p:
 
     browser.close()
 
-bad = [c for c in console if c.startswith(("error", "warning"))]
+bad = [c for c in console
+       if c.startswith(("error", "warning")) and not is_noise(c)]
 check("console is clean (no errors or warnings)", not bad, str(bad[:3]))
 
 print("\n=== " + ("GATE 8: ALL CHECKS PASSED" if not problems

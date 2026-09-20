@@ -1,6 +1,7 @@
 """Drive the Phaser bonus round in Chrome and check Gate 4."""
 import sys
 from playwright.sync_api import sync_playwright
+from browser import launch_args, is_noise
 from pathlib import Path
 import time
 import math
@@ -37,7 +38,7 @@ def launch_test_runner(page):
 
 
 with sync_playwright() as p:
-    browser = p.chromium.launch(channel="chrome")
+    browser = p.chromium.launch(**launch_args())
     page = browser.new_page(viewport={"width": 1280, "height": 950})
     page.on("console", lambda m: console.append(m.type + ": " + m.text))
     page.on("pageerror", lambda e: problems.append("pageerror: " + str(e)))
@@ -350,7 +351,7 @@ with sync_playwright() as p:
     # ============ 7. A real round, end to end ===========================
     page.goto(URL + "?debug=1")
     page.wait_for_timeout(350)
-    page.click("#start-button")
+    page.click('.game-button[data-game="states"]')
     page.locator("#mode-list button").nth(0).click()
     page.wait_for_timeout(200)
     page.locator("#region-list input").nth(0).check()
@@ -423,7 +424,8 @@ with sync_playwright() as p:
 
     browser.close()
 
-bad = [c for c in console if c.startswith(("error", "warning"))]
+bad = [c for c in console
+       if c.startswith(("error", "warning")) and not is_noise(c)]
 check("console is clean (no errors or warnings)", not bad, str(bad[:3]))
 
 print("\n=== " + ("GATE 4: ALL CHECKS PASSED" if not problems

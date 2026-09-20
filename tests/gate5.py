@@ -1,6 +1,7 @@
 """Gate 5 - the v1.0 ship gate: high scores, sound, art, persistence."""
 import sys
 from playwright.sync_api import sync_playwright
+from browser import launch_args, is_noise
 from pathlib import Path
 import shutil
 
@@ -18,6 +19,20 @@ URL = GAME.joinpath("index.html").as_uri()
 problems = []
 
 
+def wait_for_runner(page, ms=15000):
+    """Wait until the bonus round is actually running.
+
+    Phaser needs a moment to boot, and how long depends entirely on the
+    machine - on a slow one it is well past any sleep worth writing. A
+    fixed wait here meant the round was ended before there was a round
+    to end, the results screen was never reached, and every check after
+    it failed for a reason that had nothing to do with it.
+    tests/README.md says it plainly: wait for the thing, do not sleep a
+    guessed amount.
+    """
+    page.wait_for_function("() => Runner.isRunning()", timeout=ms)
+
+
 def check(label, ok, detail=""):
     print(("PASS  " if ok else "FAIL  ") + label + ("   " + detail if detail else ""))
     if not ok:
@@ -26,7 +41,7 @@ def check(label, ok, detail=""):
 
 def play_round(page, wrong_on_purpose=0):
     """Play a full Mode 1 round and end the bonus round early."""
-    page.click("#start-button")
+    page.click('.game-button[data-game="states"]')
     page.locator("#mode-list button").nth(0).click()
     page.wait_for_timeout(200)
     page.locator("#region-list input").nth(0).check()
@@ -51,7 +66,7 @@ def play_round(page, wrong_on_purpose=0):
             page.wait_for_timeout(1250)
 
     page.click("#start-runner-button")
-    page.wait_for_timeout(900)
+    wait_for_runner(page)
     page.click("#finish-runner-button")
     page.wait_for_timeout(1800)
 
@@ -64,7 +79,7 @@ with sync_playwright() as p:
 
     # ================= session 1 =================
     ctx = p.chromium.launch_persistent_context(
-        str(PROFILE), channel="chrome", viewport={"width": 1280, "height": 1000})
+        str(PROFILE), viewport={"width": 1280, "height": 1000}, **launch_args())
     page = ctx.pages[0] if ctx.pages else ctx.new_page()
     console = []
     page.on("console", lambda m: console.append(m.type + ": " + m.text))
@@ -119,7 +134,7 @@ with sync_playwright() as p:
     page.click("#save-score-button")
     page.wait_for_timeout(400)
 
-    saved = page.evaluate("() => Scores.loadScores()")
+    saved = page.evaluate("() => Scores.loadScores('states')")
     check("the score was saved with all six columns",
           len(saved) == 1 and all(k in saved[0] for k in
                                   ("name", "score", "mode", "regions", "date")),
@@ -145,31 +160,31 @@ with sync_playwright() as p:
         page.wait_for_timeout(300)
         check("a name shorter than 3 letters is refused",
               page.locator("#name-entry").is_visible()
-              and len(page.evaluate("() => Scores.loadScores()")) == 1)
+              and len(page.evaluate("() => Scores.loadScores('states')")) == 1)
         page.fill("#name-input", "Pax")
         page.click("#save-score-button")
         page.wait_for_timeout(300)
     check("two scores are now saved",
-          len(page.evaluate("() => Scores.loadScores()")) == 2)
+          len(page.evaluate("() => Scores.loadScores('states')")) == 2)
 
     # ---- mute survives, and silences everything ----
     page.click("#mute-button")
     page.wait_for_timeout(200)
     check("mute turns sound off", page.evaluate("() => Sound.isMuted()") is True)
 
-    scores_before = page.evaluate("() => Scores.loadScores()")
+    scores_before = page.evaluate("() => Scores.loadScores('states')")
     ctx.close()
 
     # ================= session 2: browser fully closed and reopened ====
     ctx2 = p.chromium.launch_persistent_context(
-        str(PROFILE), channel="chrome", viewport={"width": 1280, "height": 1000})
+        str(PROFILE), viewport={"width": 1280, "height": 1000}, **launch_args())
     page2 = ctx2.pages[0] if ctx2.pages else ctx2.new_page()
     page2.on("pageerror", lambda e: problems.append("pageerror(2): " + str(e)))
 
     page2.goto(URL + "?debug=1")
     page2.wait_for_timeout(500)
 
-    scores_after = page2.evaluate("() => Scores.loadScores()")
+    scores_after = page2.evaluate("() => Scores.loadScores('states')")
     check("HIGH SCORES SURVIVE CLOSING THE BROWSER",
           scores_after == scores_before,
           f"{len(scores_after)} rows after vs {len(scores_before)} before")
@@ -183,21 +198,21 @@ with sync_playwright() as p:
     cap = page2.evaluate("() => CONFIG.highScoreCount")
     page2.evaluate("""(cap) => {
         for (let i = 0; i < cap + 8; i++) {
-            Scores.saveScore({ name: "T" + i, score: i, mode: "State Match",
+            Scores.saveScore('states', { name: "T" + i, score: i, mode: "State Match",
                                regions: 1, date: "1/1/2026" });
         }
     }""", cap)
-    kept = page2.evaluate("() => Scores.loadScores()")
+    kept = page2.evaluate("() => Scores.loadScores('states')")
     check("the list never grows past highScoreCount",
           len(kept) == cap, f"{len(kept)} vs cap {cap}")
     check("the list is sorted best first",
           all(kept[i]["score"] >= kept[i + 1]["score"] for i in range(len(kept) - 1)))
 
     # ---- a score below the tenth gets no name box ----
-    page2.evaluate("() => Scores.clearScores()")
+    page2.evaluate("() => Scores.clearScores('states')")
     page2.evaluate("""(cap) => {
         for (let i = 0; i < cap; i++) {
-            Scores.saveScore({ name: "Ace" + i, score: 9000 + i,
+            Scores.saveScore('states', { name: "Ace" + i, score: 9000 + i,
                                mode: "State Match", regions: 1, date: "1/1/2026" });
         }
     }""", cap)
@@ -212,7 +227,7 @@ with sync_playwright() as p:
     ctx2.close()
 
     # ================= the no-art fallback =================
-    ctx3 = p.chromium.launch(channel="chrome")
+    ctx3 = p.chromium.launch(**launch_args())
     page3 = ctx3.new_page(viewport={"width": 1280, "height": 1000})
     page3.on("pageerror", lambda e: problems.append("pageerror(3): " + str(e)))
     # blank the art bundle before the page scripts run
@@ -228,7 +243,8 @@ with sync_playwright() as p:
     page3.locator("#runner-container").screenshot(path=str(SHOTS / "g5-noart.png"))
     ctx3.close()
 
-bad = [c for c in console if c.startswith(("error", "warning"))]
+bad = [c for c in console
+       if c.startswith(("error", "warning")) and not is_noise(c)]
 check("console is clean (no errors or warnings)", not bad, str(bad[:3]))
 
 print("\n=== " + ("GATE 5: ALL CHECKS PASSED" if not problems

@@ -8,43 +8,30 @@
    hidden by the CSS. Changing screens = moving that class.
 
    The order of screens:
-     Title -> Mode Select -> Region Select -> Quiz
-           -> Round Summary -> Bonus Runner -> Results
-           -> (Play Again goes back to Mode Select)
+     Game Select -> Mode Select -> Group Select -> Quiz
+                 -> Round Summary -> Bonus Runner -> Results
+                 -> (Play Again goes back to Mode Select)
 
-   PHASE 0: Quiz, Summary, Runner and Results are stubs. They
-   show a placeholder message and a button to move forward, so
-   the whole loop can be clicked through end to end.
+   The gear on Mode Select opens the word list editor, which
+   is a side road off that screen rather than part of the run.
+
+   THE SAME SCREENS SERVE EVERY GAME. There is more than one
+   now, and which one is being played lives in "activeGame" -
+   an entry from GAMES in js/games.js. Every place this file
+   would otherwise have said "state" or "region", it asks the
+   active game instead: what its groups are called, what its
+   modes are, which colours to wear, which high score table is
+   its own. Adding a third game is an entry in that file.
    ============================================================ */
-
-/* ------------------------------------------------------------
-   THE 10 MODES
-
-   "status" controls whether a mode can be picked.
-     "ready" = playable now
-     "soon"  = shown greyed out with a "Coming Soon" label
-   To turn a mode on later, change one word. Nothing else.
-   ------------------------------------------------------------ */
-const MODES = [
-  { id: 1,  name: "State Match",                  blurb: "See a state. Pick its name.",            status: "ready" },
-  { id: 2,  name: "State Speller",                blurb: "See a state. Spell its name.",           status: "ready" },
-  { id: 3,  name: "State Speller: Hard Mode",     blurb: "Spell it with no help at all.",          status: "ready" },
-  { id: 4,  name: "Capital Match",                blurb: "See a state. Pick its capital.",         status: "ready" },
-  { id: 5,  name: "Capital Speller",              blurb: "See a state. Spell its capital.",        status: "ready" },
-  { id: 6,  name: "Capital Speller: Hard Mode",   blurb: "Spell the capital with no help.",        status: "ready" },
-  { id: 7,  name: "Abbreviation Match",           blurb: "See a state. Pick its 2 letters.",       status: "ready" },
-  { id: 8,  name: "Abbreviation: Hard Mode",      blurb: "Type the 2 letters yourself.",           status: "ready" },
-  { id: 9,  name: "Find the State",               blurb: "Read a name. Click it on the map.",      status: "ready" },
-  { id: 10, name: "Find the Capital's State",     blurb: "Read a capital. Click its state.",      status: "ready" }
-];
 
 const App = (function () {
 
   // ---- What the player has chosen so far this round ----
-  let selectedMode = null;      // a MODES entry
-  let selectedRegions = [];     // region numbers, e.g. [1, 4]
+  let activeGame = null;        // a GAMES entry: which game is being played
+  let selectedMode = null;      // one of that game's modes
+  let selectedRegions = [];     // groups picked: region numbers, or list ids
   let examMode = false;         // is the next round an exam? (a switch that
-                                // works on any of the ten games)
+                                // works on any mode of either game)
   let quizPoints = 0;           // points from the quiz phase
   let coinPoints = 0;           // points from coins in the runner
   let lastTotal = 0;            // the finished score, for the high score list
@@ -87,13 +74,27 @@ const App = (function () {
       Runner.stop();
     }
 
-    // There is only ONE map and it gets moved from screen to screen,
-    // so whichever screen needs it has to ask for it on the way in.
+    // There is only ONE map and it gets moved from screen to screen, so
+    // whichever screen needs it has to ask for it on the way in. A game
+    // with no map does nothing here; that is why it goes through the
+    // game's stage rather than talking to USMap directly.
     if (name === "region-select") {
-      USMap.mountInto(document.getElementById("region-map-preview"));
+      // The map is ONE element that gets moved from screen to screen,
+      // so a game with no map does not simply leave it alone - it has
+      // to put the frame away, or the last game's map is still sitting
+      // there under the word lists.
+      const preview = document.getElementById("region-map-preview");
+      preview.hidden = !activeGame.usesMap;
+      activeGame.stage.mountInto(preview);
       refreshRegionPreview();
     } else if (name === "quiz") {
-      USMap.mountInto(document.getElementById("quiz-map"));
+      activeGame.stage.mountInto(document.getElementById("quiz-map"));
+    } else if (name === "game-select") {
+      // Rebuilt on the way in, not once at startup. Whether the
+      // spelling game can be played depends on there being a voice on
+      // this computer, and that is only ever found out for certain by
+      // trying - so a card that was offered before may not be now.
+      buildGameSelect();
     }
 
     // The Back button only makes sense if there is somewhere to go back to.
@@ -112,9 +113,20 @@ const App = (function () {
     }
   }
 
-  // Step back one screen. Does nothing on the title screen.
+  // Step back one screen. Does nothing on the first screen.
   function goBack() {
     if (history.length === 0) return;
+
+    // Leaving the word list editor saves, exactly as its Done button
+    // does. Somebody who has just typed in twelve words and reached for
+    // the Back arrow should not lose them, and "which button saves?"
+    // is not a thing anyone should have to know.
+    if (currentScreen === "list-editor") {
+      ListEditor.close();
+      buildRegionSelect();
+      setAllRegions(false);
+    }
+
     const previous = history.pop();
     showScreen(previous, { skipHistory: true });
   }
@@ -146,7 +158,7 @@ const App = (function () {
     const list = document.getElementById("mode-list");
     list.innerHTML = "";
 
-    MODES.forEach(function (mode) {
+    activeGame.modes.forEach(function (mode) {
       // In debug mode every mode is unlocked for testing.
       const playable = (mode.status === "ready") || CONFIG.debug;
 
@@ -194,44 +206,58 @@ const App = (function () {
      REGION SELECT SCREEN
      ========================================================== */
 
+  // The "pick what to practice" screen. The US game groups states into
+  // REGIONS and the spelling game groups words into weekly LISTS, but a
+  // tick box is a tick box, so one screen serves both and the game says
+  // what to call things.
   function buildRegionSelect() {
     const list = document.getElementById("region-list");
+    const groups = activeGame.getGroups();
     list.innerHTML = "";
 
-    // Count how many states are in each region, to show on the label.
+    // Count how many questions are in each group, to show on the label.
     const counts = {};
-    QUIZ_DATA.items.forEach(function (item) {
-      counts[item.region] = (counts[item.region] || 0) + 1;
+    activeGame.getAllItems().forEach(function (item) {
+      const key = activeGame.itemGroup(item);
+      counts[key] = (counts[key] || 0) + 1;
     });
 
-    Object.keys(QUIZ_DATA.regions).forEach(function (key) {
-      const regionNumber = parseInt(key, 10);
+    document.getElementById("region-heading").textContent =
+      activeGame.groupHeading;
+    document.getElementById("region-lead").textContent =
+      activeGame.groupLead;
+
+    Object.keys(groups).forEach(function (key, index) {
+      const groupId = activeGame.groupIdFromKey(key);
 
       const label = document.createElement("label");
       label.className = "region-item";
 
       const box = document.createElement("input");
       box.type = "checkbox";
-      box.value = String(regionNumber);
+      box.value = String(key);
       box.addEventListener("change", onRegionChange);
       label.appendChild(box);
 
-      // A colored dot in this region's map color. This is the map's
-      // key: the dot next to "New England" is the color New England
-      // turns on the map when it is picked.
+      // A colored dot. In the US game it is the map's key: the dot next
+      // to "New England" is the color New England turns on the map when
+      // it is picked. The spelling game has no map, so its dots are just
+      // a way of telling one list from another - which is why they are
+      // handed out by position and wrap round after ten.
       const swatch = document.createElement("span");
-      swatch.className = "region-swatch region-swatch-" + regionNumber;
+      swatch.className = "region-swatch region-swatch-"
+        + activeGame.swatchFor(key, index);
       swatch.setAttribute("aria-hidden", "true");
       label.appendChild(swatch);
 
       const text = document.createElement("span");
       text.className = "region-name";
-      text.textContent = QUIZ_DATA.regions[key];
+      text.textContent = groups[key];
       label.appendChild(text);
 
       const count = document.createElement("span");
       count.className = "region-count";
-      count.textContent = (counts[regionNumber] || 0) + " states";
+      count.textContent = (counts[groupId] || 0) + " " + activeGame.itemWord;
       label.appendChild(count);
 
       list.appendChild(label);
@@ -240,31 +266,30 @@ const App = (function () {
     onRegionChange();
   }
 
-  // Runs whenever a region box is ticked or unticked.
+  // Runs whenever a group box is ticked or unticked.
   function onRegionChange() {
     const boxes = document.querySelectorAll("#region-list input[type=checkbox]");
     selectedRegions = [];
     for (let i = 0; i < boxes.length; i++) {
       if (boxes[i].checked) {
-        selectedRegions.push(parseInt(boxes[i].value, 10));
+        selectedRegions.push(activeGame.groupIdFromKey(boxes[i].value));
       }
     }
 
     // Count the questions the round will have, and show it in plain words.
-    const questionCount = QUIZ_DATA.items.filter(function (item) {
-      return selectedRegions.indexOf(item.region) !== -1;
-    }).length;
+    const questionCount = activeGame.getItems(selectedRegions).length;
 
     const summary = document.getElementById("region-summary");
     if (selectedRegions.length === 0) {
-      summary.textContent = "Pick at least one region to start.";
+      summary.textContent =
+        "Pick at least one " + activeGame.groupLabelOne + " to start.";
     } else {
       // An exam doubles the bonus, so the line has to say the number he
       // will actually get - otherwise the results screen is a surprise.
       const bonus = selectedRegions.length * CONFIG.regionBonusPerRegion
         * (examMode ? CONFIG.examBonusMultiplier : 1);
 
-      summary.textContent = questionCount + " questions"
+      summary.textContent = questionCount + " " + activeGame.itemWord
         + "  •  " + bonus + " bonus points at the end"
         + (examMode ? "  •  Exam Mode" : "");
     }
@@ -278,13 +303,15 @@ const App = (function () {
 
   // Repaint the map so it shows exactly what is ticked right now.
   // Every picked region gets its own color; everything else goes gray.
+  // Only the US game has a map; for the others this does nothing.
   function refreshRegionPreview() {
+    if (!activeGame.usesMap) return;
+
     USMap.clearAll();
 
     selectedRegions.forEach(function (regionNumber) {
-      const abbrs = QUIZ_DATA.items
-        .filter(function (item) { return item.region === regionNumber; })
-        .map(function (item) { return item.abbr; });
+      const abbrs = activeGame.getItems([regionNumber])
+        .map(function (item) { return activeGame.itemKey(item); });
 
       USMap.setRegionTint(abbrs, regionNumber);
     });
@@ -313,7 +340,7 @@ const App = (function () {
     // Hand control to the quiz engine. It runs the whole round and calls
     // finishQuiz() when the last question is done.
     Quiz.start(selectedMode.id, selectedRegions, finishQuiz,
-      { exam: examMode });
+      { exam: examMode, game: activeGame });
   }
 
   // The quiz engine calls this when the round is over.
@@ -357,18 +384,31 @@ const App = (function () {
     list.innerHTML = "";
     if (!result.exam) return;
 
-    // Gather the questions under their region, keeping the order asked
-    // inside each one.
+    // Gather the questions under the group they came from - a region in
+    // the US game, a word list in the spelling one - keeping the order
+    // asked inside each one. The per-group tally is the point of the
+    // whole screen: it is what says where to focus next.
+    const groups = activeGame.getGroups();
     const byRegion = {};
+    const order = [];
     result.record.forEach(function (item) {
-      (byRegion[item.region] = byRegion[item.region] || []).push(item);
+      if (!byRegion[item.group]) {
+        byRegion[item.group] = [];
+        order.push(item.group);
+      }
+      byRegion[item.group].push(item);
     });
 
-    Object.keys(byRegion)
-      .map(Number)
-      .sort(function (a, b) { return a - b; })
-      .forEach(function (regionNumber) {
-        const rows = byRegion[regionNumber];
+    // Groups come out in the order the game lists them, not the order
+    // they happened to be asked in, so the screen reads the same way the
+    // tick-box screen did.
+    const listed = Object.keys(groups).map(activeGame.groupIdFromKey);
+    order.sort(function (a, b) {
+      return listed.indexOf(a) - listed.indexOf(b);
+    });
+
+    order.forEach(function (groupId) {
+        const rows = byRegion[groupId];
         const gotRight = rows.filter(function (r) { return r.right; }).length;
 
         const group = document.createElement("div");
@@ -378,12 +418,14 @@ const App = (function () {
         heading.className = "review-region";
 
         const swatch = document.createElement("span");
-        swatch.className = "region-swatch region-swatch-" + regionNumber;
+        swatch.className = "region-swatch region-swatch-"
+          + activeGame.swatchFor(groupId, listed.indexOf(groupId));
         swatch.setAttribute("aria-hidden", "true");
         heading.appendChild(swatch);
 
         const label = document.createElement("span");
-        label.textContent = QUIZ_DATA.regions[String(regionNumber)];
+        label.className = "review-region-name";
+        label.textContent = groups[String(groupId)] || String(groupId);
         heading.appendChild(label);
 
         const tally = document.createElement("span");
@@ -397,7 +439,7 @@ const App = (function () {
         });
 
         list.appendChild(group);
-      });
+    });
   }
 
   // One question on the review screen.
@@ -475,10 +517,13 @@ const App = (function () {
     document.getElementById("results-quiz").textContent = quizPoints;
     document.getElementById("results-coins").textContent = coinPoints;
     document.getElementById("results-bonus").textContent = regionBonus;
+    document.getElementById("results-bonus-label").textContent =
+      activeGame.bonusLabel;
     document.getElementById("results-total").textContent = total;
 
     if (CONFIG.debug) {
       console.log("[main] results math:", {
+        game: activeGame.id,
         quizPoints: quizPoints,
         coinPoints: coinPoints,
         regions: selectedRegions.length,
@@ -488,9 +533,11 @@ const App = (function () {
       });
     }
 
-    // Good enough for the top ten? Then ask for a name.
+    // Good enough for the top ten? Then ask for a name. Each game keeps
+    // its own table, so a spelling score is never ranked against a
+    // states one - they are not the same thing and never were.
     lastTotal = total;
-    const madeIt = Scores.isHighScore(total);
+    const madeIt = Scores.isHighScore(activeGame.id, total);
 
     document.getElementById("name-entry").hidden = !madeIt;
     document.getElementById("save-score-button").disabled = false;
@@ -541,7 +588,7 @@ const App = (function () {
       date: new Date().toLocaleDateString()
     };
 
-    Scores.saveScore(entry);
+    Scores.saveScore(activeGame.id, entry);
     Scores.saveLastName(name);
 
     document.getElementById("name-entry").hidden = true;
@@ -551,13 +598,13 @@ const App = (function () {
   // Draw the top ten. "justAdded" is the row to highlight, or null.
   function renderHighScores(justAdded) {
     const holder = document.getElementById("high-scores");
-    const list = Scores.loadScores();
+    const list = Scores.loadScores(activeGame.id);
 
     holder.innerHTML = "";
 
     const heading = document.createElement("h3");
     heading.className = "scores-title";
-    heading.textContent = "Best Scores";
+    heading.textContent = "Best Scores - " + activeGame.name;
     holder.appendChild(heading);
 
     if (list.length === 0) {
@@ -571,8 +618,13 @@ const App = (function () {
     const table = document.createElement("table");
     table.className = "scores-table";
 
+    // The fifth column is "Regions" in the US game and "Lists" in the
+    // spelling one: the same number, counting different things.
+    const columns = ["#", "Name", "Score", "Game",
+                     activeGame.scoreColumn, "Date"];
+
     const head = document.createElement("tr");
-    ["#", "Name", "Score", "Game", "Regions", "Date"].forEach(function (label) {
+    columns.forEach(function (label) {
       const cell = document.createElement("th");
       cell.textContent = label;
       head.appendChild(cell);
@@ -631,6 +683,9 @@ const App = (function () {
     setTimeout(function () { burst.remove(); }, 2600);
   }
 
+  // Back to the mode list of the game just played, not to the game
+  // picker: wanting another go at the same game is much the commoner
+  // thing, and the picker is one Back away if it isn't.
   function playAgain() {
     selectedMode = null;
     selectedRegions = [];
@@ -651,6 +706,86 @@ const App = (function () {
     examMode = !!on;
     document.getElementById("exam-toggle").checked = examMode;
     onRegionChange();     // the bonus on the summary line doubles or halves
+  }
+
+  /* ==========================================================
+     THE GAME PICKER
+
+     The first thing on screen. Each game is a card in its own
+     colours, so which one you are in is never a guess.
+     ========================================================== */
+
+  function buildGameSelect() {
+    const list = document.getElementById("game-list");
+    list.innerHTML = "";
+
+    GAMES.all.forEach(function (entry) {
+      const card = document.createElement("button");
+      card.type = "button";
+      card.className = "game-button";
+      card.dataset.game = entry.id;
+
+      const title = document.createElement("span");
+      title.className = "game-name";
+      title.textContent = entry.name;
+      card.appendChild(title);
+
+      const blurb = document.createElement("span");
+      blurb.className = "game-blurb";
+      blurb.textContent = entry.blurb;
+      card.appendChild(blurb);
+
+      // A game can say it cannot be played on this computer. The
+      // spelling game does exactly that when there is no voice
+      // installed: it needs to read words out loud, and saying so
+      // plainly beats letting her open a game that will sit silent.
+      const trouble = entry.unavailableReason && entry.unavailableReason();
+      if (trouble) {
+        card.classList.add("is-locked");
+        card.disabled = true;
+
+        const tag = document.createElement("span");
+        tag.className = "game-tag";
+        tag.textContent = trouble;
+        card.appendChild(tag);
+      } else {
+        card.addEventListener("click", function () { chooseGame(entry); });
+      }
+
+      list.appendChild(card);
+    });
+  }
+
+  // The one place a game is switched. Everything that depends on WHICH
+  // game is being played is rebuilt here, so the two can never get out
+  // of step with each other.
+  function chooseGame(entry) {
+    activeGame = entry;
+
+    // The colour theme. Every colour in the stylesheet comes from a
+    // variable, and this one attribute is what swaps the whole set.
+    document.body.dataset.game = entry.id;
+
+    selectedMode = null;
+    selectedRegions = [];
+
+    // The mode cards and the tick boxes are rebuilt BEFORE the exam
+    // switch is touched, because turning that switch recounts the
+    // questions in the ticked groups - and until the boxes have been
+    // rebuilt those are still the other game's.
+    buildModeSelect();
+    buildRegionSelect();
+    setAllRegions(false);
+    setExamMode(false);
+
+    // The mode screen names the game, so which one she is in is never
+    // in doubt once the picker is behind her.
+    document.getElementById("mode-heading").textContent = entry.name;
+
+    // Only the spelling game has a word list to edit.
+    document.getElementById("edit-lists-button").hidden = !entry.editableLists;
+
+    showScreen("mode-select");
   }
 
   /* ==========================================================
@@ -687,13 +822,38 @@ const App = (function () {
     document.getElementById("version-tag").textContent =
       "v" + CONFIG.APP_VERSION;
 
+    // Start out in the US game so that everything has a game to read
+    // from before one has been picked. The picker replaces it the
+    // moment a card is clicked.
+    activeGame = GAMES.states;
+    document.body.dataset.game = activeGame.id;
+
+    buildGameSelect();
     buildModeSelect();
     buildRegionSelect();
     refreshMuteButton();
 
+    // If it turns out this computer has no voice, the spelling card
+    // has to stop offering a game that cannot be played. We only find
+    // that out by trying, so the picker is told rather than asked.
+    Speech.whenChanged(buildGameSelect);
+
     // --- Button wiring ---
-    document.getElementById("start-button")
-      .addEventListener("click", function () { showScreen("mode-select"); });
+
+    // The gear on the Pick a Game screen. Spelling only.
+    document.getElementById("edit-lists-button")
+      .addEventListener("click", function () {
+        ListEditor.open();
+        showScreen("list-editor");
+      });
+
+    // Done saves on the way out, so the last thing typed is never
+    // quietly lost, and then rebuilds the tick-box screen - the lists
+    // on it have just changed.
+    // Done is Back with a clearer label. goBack() does the saving and
+    // the rebuilding, so both routes out behave identically.
+    document.getElementById("editor-done")
+      .addEventListener("click", goBack);
 
     document.getElementById("start-quiz-button")
       .addEventListener("click", startQuiz);
@@ -751,7 +911,7 @@ const App = (function () {
     // Testing helper, only visible with ?debug=1.
     document.getElementById("clear-scores-button")
       .addEventListener("click", function () {
-        Scores.clearScores();
+        Scores.clearScores(activeGame.id);
         renderHighScores(null);
       });
 
@@ -764,8 +924,10 @@ const App = (function () {
         refreshMuteButton();
       });
 
-    // Start on the title screen.
-    showScreen("title", { skipHistory: true });
+    // Start on the game picker. It is the first thing on screen because
+    // there is more than one game now, and which one you are playing has
+    // to be the first thing decided.
+    showScreen("game-select", { skipHistory: true });
 
     // --- Phase 0 self-check, printed only in debug mode ---
     if (CONFIG.debug) {
@@ -785,11 +947,17 @@ const App = (function () {
         "regions:", Object.keys(QUIZ_DATA.regions).length,
         "per region:", perRegion);
       console.log("[check] sounds:", Sound.names.join(", "));
+      console.log("[check] games:",
+        GAMES.all.map(function (g) { return g.id; }).join(", "));
+      console.log("[check] speech:", Speech.describe());
       console.log("[check] artwork loaded:",
         (typeof SPRITE_ART !== "undefined" && SPRITE_ART)
           ? Object.keys(SPRITE_ART).length + " pictures"
           : "none - the running game will use plain boxes");
-      console.log("[check] saved high scores:", Scores.loadScores().length);
+      console.log("[check] saved high scores:",
+        GAMES.all.map(function (g) {
+          return g.id + "=" + Scores.loadScores(g.id).length;
+        }).join(" "));
     }
   }
 

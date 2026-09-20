@@ -372,7 +372,7 @@ Move him with the physics body's own reposition, not by setting the drawn shape'
 
 Claude Code should execute phase by phase and STOP at each gate to be tested in a browser before continuing. Each gate lists exactly what to check.
 
-**Progress: Phases 0-7 and 5B are BUILT. v1.0 and v1.1 are shipped and tagged; Phase 7 (v2.0) passed its gate in play. Phase 8 is BUILT and its automated checks pass; it is waiting on GATE 8, a person at a browser. That is every phase in this plan.**
+**Progress: Phases 0-10 and 5B are BUILT. v1.0 and v1.1 are shipped and tagged; Phase 7 (v2.0) passed its gate in play; Phase 8 (v2.1) is built and its checks pass. Phases 9 and 10 (v3.0) add a SECOND GAME and are built; their automated checks pass, and GATE 9 and GATE 10 want a person at a browser — one of them with working speakers.**
 
 ### Phase 0: Scaffold (v1.0) — DONE, gate passed
 Project structure, `index.html` loading everything via script tags from `file://`, Phaser bundled locally, empty screen state machine (Title -> stub screens), config + full states data file (Appendix A).
@@ -549,11 +549,46 @@ The switch described in Section 14, for all built modes: no hints, no second cha
 >
 > `tests/gate8.py` covers all of it; the full suite (gates 1-8) passes.
 
+### Phase 9: A second game — Spelling List (v3.0) — BUILT, awaiting gate
+See Section 15. The engine stopped knowing what a state is; a game picker became the first
+screen; a word is read out loud instead of shown; the weekly word lists are edited inside the
+game; each game keeps its own high score table and its own colours.
+
+Built in four steps, in this order, because the first carries all the regression risk:
+
+- **9A, the refactor, nothing new.** `js/games.js` arrives holding one entry, the US game. The
+  mode tables move into it, and every `USMap.*` call and `QUIZ_DATA` reference in `js/quiz.js`
+  goes through the game instead. Nothing on screen changes.
+- **9B, the voice.** `js/speech.js`, plus four numbers in `data/config.js`.
+- **9C, data and picker.** `data/spelling.js`, `js/spelling-store.js`, the game-select screen,
+  `body[data-game]` and the two colour schemes.
+- **9D, the game.** `GAMES.spelling`, its two modes, the voice stage, the free "Say it again"
+  button, the next-letter hint, the capitals switch, and separate high scores.
+
+**GATE 9A:** all eight existing suites pass, unchanged in what they check, AND a double-clicked
+`index.html` plays a round of Mode 2 and a round of Mode 9 exactly as before.
+**GATE 9:** on the computer she actually plays on, with the sound up: the word is read clearly,
+the word is never on screen, "Say it again" never costs a point, Hint gives one letter for 2
+points, points become running seconds, and the score lands on a spelling-only table with the
+states table untouched.
+
+### Phase 10: The word list editor (v3.0) — BUILT, awaiting gate
+The gear on the spelling game's mode select. Lists added, renamed and deleted; words one per
+line; the "Capital letters must match" tick box; the optional example sentence; every word read
+back with a button to hear it; and the copy-and-paste backup. Exam Mode carries over to the
+spelling game with no new code — it is still a switch.
+
+**GATE 10:** a parent who has never seen the code changes next week's words, saves, closes the
+browser, reopens it, and the new words are there. An exam round marks nothing until the end and
+its review screen groups by word list.
+
 ---
 
 ## 13. Testing Notes for Claude Code
 
-- Add a `?debug=1` URL flag: shows the answer on screen, sets runner test timer, unlocks all modes. Never on by default.
+- Add a `?debug=1` URL flag: shows the answer on screen, sets runner test timer, unlocks all modes. Never on by default. **In the spelling game this matters more than anywhere else**: the whole game rests on the word not being visible, so any check about what is *visible* must run with the flag off, or it is worth nothing.
+- **Speech cannot be listened for.** Most machines a suite runs on have no voice installed at all. `Speech.debugScript()` reports what was handed to the reader, in order — that is the part the game is responsible for, and it is what `tests/gate9.py` asserts. Whether a voice then says it out loud is checked by a person with ears, at GATE 9.
+- **`STATE_QUEST_CHROME`** points the suite at a particular browser binary, for machines with no Google Chrome installed. Unset, nothing changes: the suite drives the real Chrome, deliberately, for the reason `tests/README.md` gives.
 - Console-log the scoring math per question in debug mode so gate checks are easy.
 - Manual browser testing on `file://` in Chrome is the acceptance environment. Do not rely on dev-server-only behavior.
 - Keep functions small and commented; This code may be read with future Claude sessions.
@@ -638,6 +673,102 @@ ranked against a practice one. The high score table gains a mark on exam rows.
 - Do not let the map highlight double as feedback: it must keep showing the *question*.
 
 ---
+
+## 15. The Spelling List game (v3.0 — built in Phases 9 and 10)
+
+A second GAME, not an eleventh mode. Asked for after the first game worked: the same loop —
+answer questions, earn running time, chase a score — is the right shape for a weekly spelling
+list, but a spelling game cannot do the one thing every existing mode does, which is show the
+thing being asked about.
+
+### The rule the whole game rests on
+
+**THE WORD IS NEVER ON SCREEN.** It is spoken. Putting it on screen would be showing the
+spelling, which is the thing being asked for; a spelling game that shows the word is a typing
+game. Everything else here follows from that one line, including the parts that look like
+over-engineering:
+
+- There is a free, unlimited **"Say it again"** button, and it must never cost a point. The
+  word is the QUESTION. Charging to re-hear it turns a spelling test into a hearing test.
+  It is bound to Enter as well, which is free in a practice round because every printable key
+  is taken by the spelling itself.
+- A word may carry an **example sentence**, spoken after it. Without one, "their" and "there"
+  are the same question with two right answers, and she is marked wrong for spelling a real
+  word correctly. Most words need no sentence.
+- If the computer has **no voice installed**, the game says so — on the game-select card
+  before she picks it, and on the quiz screen if we only find out later. It never falls back
+  to showing the word. A silent fallback would change what the game tests without telling
+  anyone it had.
+
+### How the engine came to serve two games
+
+`js/quiz.js` talked to the US map and the states data by name. That was right while there was
+one subject. Adding a second meant the engine had to stop knowing what a state is, so
+everything subject-specific moved to **`js/games.js`**, and the engine asks a GAME for it:
+where the questions come from, what tells two apart, and the **stage** — the part of the screen
+a question appears ON. The map is one stage; the voice is another. The spelling stage does
+nothing at all for most of the stage's methods, which is the point.
+
+The refactor was done first and alone, with the eight existing suites as its gate, because it
+touched 22 call sites in a 1600-line file that all eight depended on.
+
+### Capitalization, which came out nearly free
+
+`mustBeCapital()` already opened with *"is the letter in the answer a capital? no? then no
+capital is required."* So **which words need a capital is how you type them in the list**:
+`Monday` asks for one, `because` never does. Nothing extra to fill in, and nothing new to build.
+
+The **"Capital letters must match"** tick box per list is one early return on top of that. With
+it off, `monday` is accepted — and because the engine already accepts the canonical letter
+rather than the typed one, the screen fills in the capital M, so the right spelling is still
+what she ends up looking at. Exam Mode had to be taught the same thing, or practice and the
+exam would mark the same answer differently.
+
+### The word lists
+
+Editable inside the game, behind a gear on the mode-select screen, because a weekly list that
+needs a text editor is a weekly list that stops getting changed.
+
+- **One rule about where words come from:** nothing saved yet, use `data/spelling.js`; anything
+  saved, use that and never look at the file again. Merging the two would mean a list you
+  deleted kept coming back.
+- **Words are one per line in one box**, not a row each. Pasting twelve words off a school
+  handout takes five seconds; building twelve rows takes two minutes. What a box loses is that
+  a typo hides in it — so every word is read back underneath, with a button to hear it.
+- **Curly apostrophes are straightened on the way in.** A list pasted out of a Word document
+  arrives with `don’t`, and the key on her keyboard makes the other kind. She would spell the
+  word perfectly, be told she was wrong, and have nothing on screen to show the difference.
+- **The copy-and-paste backup is not optional.** `localStorage` on `file://` is wiped by "clear
+  browsing data" and belongs to one browser on one computer. Without a way out, every week's
+  list is one stray click from gone.
+
+### Scores, and what is not comparable
+
+Each game keeps its own top ten, under its own key. The US game keeps the old key
+(`stateQuest.highScores`) so scores saved before there was a second game survive untouched.
+A spelling round and a states round were never the same thing to rank against each other.
+
+### Judgment calls made here (flag any of these if wrong)
+
+- The **Hint reveals the next letter** and costs the same flat `penaltyPoints`. In the US game
+  it names the lit-up state; there is no equivalent here, and one letter is the smallest useful
+  help. It goes in through the same door a typed letter does, so a hint on the last letter
+  finishes the word properly.
+- **The game picker replaced the title screen** rather than sitting after it. Which game you are
+  playing is the first thing to decide, and a Start button in front of it is a click that asks
+  nothing.
+- **"Play Again" returns to the same game's mode list**, not to the picker. Another go at the
+  same game is much the commoner want.
+- **Word lists are the regions analogue**, so the bonus maths, the tick-box screen and the exam
+  review grouping are all unchanged. Keeping old weeks also makes cumulative review possible.
+- **A word appearing in two lists is asked twice.** That is what practising it twice looks like,
+  so it is flagged in the editor rather than prevented.
+- **Not built, and worth saying out loud:** nothing here asks the words she gets wrong more
+  often. Spaced repetition would be the single biggest learning win available, and the engine
+  already re-queues a skipped word once. It belongs in a later phase, not this one.
+
+---
+
 
 ## Appendix A: Full State Data (authoritative, do not invent values)
 

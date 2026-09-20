@@ -10,6 +10,7 @@ really for, in the spec's words:
 """
 import sys
 from playwright.sync_api import sync_playwright
+from browser import launch_args, is_noise
 from pathlib import Path
 
 # Where the game is, worked out from where THIS file is, so the
@@ -53,7 +54,7 @@ def start(page, mode, regions=(NEW_ENGLAND,), debug=True, quick=True):
         # round is under way, and "it is not there yet" can never be true.
         page.evaluate("() => { CONFIG.hintDelaySeconds = 1.0;"
                       " CONFIG.skipDelaySeconds = 0.3; }")
-    page.click("#start-button")
+    page.click('.game-button[data-game="states"]')
     page.locator("#mode-list button").nth(mode - 1).click()
     page.wait_for_timeout(200)
     for i in regions:
@@ -214,7 +215,7 @@ def solve_click(page):
 
 
 with sync_playwright() as p:
-    browser = p.chromium.launch(channel="chrome")
+    browser = p.chromium.launch(**launch_args())
     page = browser.new_page(viewport={"width": 1280, "height": 1100})
     page.on("console", lambda m: console.append(m.type + ": " + m.text))
     page.on("pageerror", lambda e: problems.append("pageerror: " + str(e)))
@@ -241,7 +242,7 @@ with sync_playwright() as p:
     check("the hint still costs exactly one penaltyPoints",
           cfg["penaltyPoints"] == 2, str(cfg["penaltyPoints"]))
 
-    page.click("#start-button")
+    page.click('.game-button[data-game="states"]')
     page.wait_for_timeout(250)
     labels = page.locator("#mode-list button")
     check("all ten modes are on the menu", labels.count() == 10,
@@ -633,7 +634,8 @@ with sync_playwright() as p:
 
     browser.close()
 
-bad = [c for c in console if c.startswith(("error", "warning"))]
+bad = [c for c in console
+       if c.startswith(("error", "warning")) and not is_noise(c)]
 check("console is clean (no errors or warnings)", not bad, str(bad[:3]))
 
 print("\n=== " + ("GATE 7: ALL CHECKS PASSED" if not problems

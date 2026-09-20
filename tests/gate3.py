@@ -1,6 +1,7 @@
 """Drive the typed spelling modes in Chrome and check Gate 3."""
 import sys
 from playwright.sync_api import sync_playwright
+from browser import launch_args, is_noise
 from pathlib import Path
 
 # Where the game is, worked out from where THIS file is, so the
@@ -27,7 +28,7 @@ def start(page, mode, regions=(0,), debug=True):
     """mode is 1-based: 2 = State Speller, 3 = Hard."""
     page.goto(URL + ("?debug=1" if debug else ""))
     page.wait_for_timeout(300)
-    page.click("#start-button")
+    page.click('.game-button[data-game="states"]')
     page.locator("#mode-list button").nth(mode - 1).click()
     page.wait_for_timeout(200)
     for i in regions:
@@ -75,7 +76,7 @@ def type_rest(page, word=None):
 
 
 with sync_playwright() as p:
-    browser = p.chromium.launch(channel="chrome")
+    browser = p.chromium.launch(**launch_args())
     page = browser.new_page(viewport={"width": 1280, "height": 1000})
     page.on("console", lambda m: console.append(m.type + ": " + m.text))
     page.on("pageerror", lambda e: problems.append("pageerror: " + str(e)))
@@ -358,7 +359,8 @@ with sync_playwright() as p:
 
     browser.close()
 
-bad = [c for c in console if c.startswith(("error", "warning"))]
+bad = [c for c in console
+       if c.startswith(("error", "warning")) and not is_noise(c)]
 check("console is clean (no errors or warnings)", not bad, str(bad[:3]))
 
 print("\n=== " + ("GATE 3: ALL CHECKS PASSED" if not problems

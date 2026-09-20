@@ -12,9 +12,37 @@
 
 const CONFIG = {
 
-  APP_VERSION: "2.1",        // Which build of the game this is. It is written down
+  APP_VERSION: "3.0",        // Which build of the game this is. It is written down
                              // HERE and nowhere else - the title screen reads it
                              // from this line, so bumping it here bumps it there.
+
+  // --- The spelling game's voice ---------------------------
+  //
+  // The spelling game reads each word out loud, because putting it on
+  // screen would be showing her the spelling. It borrows the voice
+  // already installed on the computer; nothing is downloaded.
+
+  speechRate: 0.8,           // How fast the word is read out. 1 is the computer's
+                             // normal speed, which is a bit quick for a 7-year-old.
+                             // 0.5 is very slow and careful, 1.5 is fast.
+
+  speechPitch: 1.0,          // How high the voice sounds. Leave this at 1 unless
+                             // the voice on your computer is hard to listen to.
+
+  sayWordTwice: true,        // Read the word, then the example sentence if there
+                             // is one, then the word AGAIN. The second reading is
+                             // so the word is not forgotten while the sentence is
+                             // being said. Set to false to hear it only once.
+
+  speechGapSeconds: 0.35,    // The pause between the word and the sentence. Bigger
+                             // if the two run into each other on your computer.
+
+  speechWaitSeconds: 3,      // How long to wait for the browser to say which
+                             // voices it has, before deciding there are none and
+                             // greying the spelling game out. Every browser fills
+                             // this in within a second, so 3 is generous. Raise it
+                             // if a very slow computer wrongly says it has no
+                             // voice; a voice that turns up later is taken anyway.
 
   // --- Quiz scoring -----------------------------------------
 

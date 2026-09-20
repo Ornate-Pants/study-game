@@ -2,14 +2,21 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>State Quest</title>
+<title>Study Quest</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 <!--
-  STATE QUEST - a states and capitals study game
+  STUDY QUEST - two study games, one engine
 
   Open this file by double-clicking it. There is no
   server, no install, no internet needed.
+
+  Which game is being played lives in js/games.js. The
+  screens below are shared between them: whichever game is
+  active fills in its own modes, its own groups to pick from
+  and its own colours. The spelling game hides the map and
+  shows the Say it again button; the US game does the
+  opposite.
 
   Why every script below is a plain <script src="..."> tag:
   when a page is opened straight from a folder (file://),
@@ -37,11 +44,15 @@
 
 <main class="app">
 
-  <!-- ========== TITLE ========== -->
-  <section class="screen" id="screen-title">
-    <h1 class="title-big">State Quest</h1>
-    <p class="lead">Learn the states. Earn time. Then run and grab coins!</p>
-    <button type="button" id="start-button" class="big-button">Start</button>
+  <!-- ========== GAME SELECT ==========
+       The first screen. There is more than one game now, so which one
+       is being played has to be the first thing decided. main.js fills
+       the cards in from the GAMES list in js/games.js. -->
+  <section class="screen" id="screen-game-select">
+    <h1 class="title-big">Study Quest</h1>
+    <p class="lead">Which one do you want to study?</p>
+
+    <div id="game-list" class="game-list"></div>
 
     <!-- Testing helper. Only ever shown with ?debug=1. Jumps straight
          into the running game so it can be tried without a quiz first. -->
@@ -56,30 +67,46 @@
     <p class="version-tag" id="version-tag"></p>
   </section>
 
-  <!-- ========== MODE SELECT ========== -->
+  <!-- ========== MODE SELECT ==========
+       The heading names the GAME you are in, because the screen before
+       this one is where a game gets picked - a second "Pick a Game"
+       here would be asking the same question twice. -->
   <section class="screen" id="screen-mode-select">
-    <h2>Pick a Game</h2>
+    <h2 id="mode-heading">Pick a Game</h2>
     <p class="lead">Which way do you want to play?</p>
-    <!-- main.js fills this in from the MODES list -->
+    <!-- main.js fills this in from the active game's mode list -->
     <div id="mode-list" class="mode-list"></div>
+
+    <!-- The gear. Only the spelling game has a word list to change, so
+         main.js hides this everywhere else. It is here, next to the
+         games it changes, rather than buried in a settings screen. -->
+    <p class="mode-tools">
+      <button type="button" id="edit-lists-button" class="small-button gear-button" hidden>
+        &#9881; Change the Word Lists
+      </button>
+    </p>
   </section>
 
-  <!-- ========== REGION SELECT ========== -->
+  <!-- ========== GROUP SELECT ==========
+       Shared: the US game picks REGIONS here and the spelling game
+       picks weekly LISTS. main.js fills in the heading and the boxes
+       from whichever game is being played. -->
   <section class="screen" id="screen-region-select">
-    <h2>Pick Your Regions</h2>
-    <p class="lead">Check the boxes for the parts you want to practice. Pick as many as you like.</p>
+    <h2 id="region-heading">Pick Your Regions</h2>
+    <p class="lead" id="region-lead">Check the boxes for the parts you want to practice. Pick as many as you like.</p>
 
     <div class="region-actions">
       <button type="button" id="pick-all-button" class="small-button">Pick All</button>
       <button type="button" id="clear-regions-button" class="small-button">Clear</button>
     </div>
 
-    <!-- main.js fills this in from the region list in data/states.js -->
+    <!-- main.js fills this in from the active game: the regions in
+         data/states.js, or the saved spelling word lists. -->
     <div id="region-list" class="region-list"></div>
 
-    <!-- EXAM MODE. A switch, not a game: it can be turned on for any of
-         the ten. It lives here, right before the round starts, so the
-         choice is made at the last moment. -->
+    <!-- EXAM MODE. A switch, not a game: it can be turned on for any
+         mode of either game. It lives here, right before the round
+         starts, so the choice is made at the last moment. -->
     <label class="exam-toggle" id="exam-toggle-label">
       <input type="checkbox" id="exam-toggle">
       <span class="exam-toggle-text">
@@ -91,12 +118,118 @@
       </span>
     </label>
 
-    <!-- The live map preview. js/map.js drops the map in here. -->
+    <!-- The live map preview. js/map.js drops the map in here.
+         Only the US game has a map; main.js hides this for the rest. -->
     <div id="region-map-preview" class="map-frame"></div>
 
     <p id="region-summary" class="region-summary"></p>
 
     <button type="button" id="start-quiz-button" class="big-button" disabled>Start Round</button>
+  </section>
+
+  <!-- ========== WORD LIST EDITOR ==========
+       Reached by the gear under the spelling game's mode cards. Built
+       for a parent changing next week's words on a Sunday night, not
+       for a programmer. js/list-editor.js fills it in. -->
+  <section class="screen" id="screen-list-editor">
+    <h2>Change the Word Lists</h2>
+    <p class="lead">
+      Add this week's words here. Everything saves in this browser.
+    </p>
+
+    <div class="editor-row">
+
+      <!-- The lists themselves, one button each. -->
+      <div class="editor-lists">
+        <h3 class="editor-heading">Your lists</h3>
+        <div id="editor-list-buttons" class="editor-list-buttons"></div>
+        <button type="button" id="editor-new-list" class="small-button">
+          + New List
+        </button>
+      </div>
+
+      <!-- Whichever one is picked. -->
+      <div class="editor-pane">
+        <label class="editor-field">
+          <span class="editor-label">List name</span>
+          <input type="text" id="editor-name" class="editor-input"
+                 maxlength="40" autocomplete="off">
+        </label>
+
+        <label class="editor-check">
+          <input type="checkbox" id="editor-caps">
+          <span class="editor-check-text">
+            <strong>Capital letters must match</strong>
+            <span class="editor-check-blurb">
+              On: "Monday" has to be typed with its capital M.
+              Off: "monday" is accepted too.
+              Either way, only words you typed with a capital ever ask
+              for one.
+            </span>
+          </span>
+        </label>
+
+        <label class="editor-field">
+          <span class="editor-label">
+            The words &mdash; one per line
+          </span>
+          <span class="editor-help">
+            For a word that sounds like another one, add an example
+            sentence after a bar:
+            <code>their | Put on their coats.</code>
+          </span>
+          <textarea id="editor-words" class="editor-words" rows="10"
+                    spellcheck="false" autocomplete="off"></textarea>
+        </label>
+
+        <div class="editor-actions">
+          <button type="button" id="editor-save" class="big-button">
+            Save
+          </button>
+          <button type="button" id="editor-delete" class="small-button danger-button">
+            Delete this list
+          </button>
+        </div>
+
+        <!-- What the words above were understood to be, with a button
+             to hear each one. Hearing a word BEFORE she meets it is
+             the point: computer voices get some words wrong, and this
+             is where that gets caught. -->
+        <h3 class="editor-heading">Check it over</h3>
+        <p class="editor-help">
+          Press a word to hear it exactly as the game will say it.
+        </p>
+        <div id="editor-preview" class="editor-preview"></div>
+        <div id="editor-notes" class="editor-notes"></div>
+      </div>
+    </div>
+
+    <!-- The backup. Not optional: the browser's storage is wiped by
+         "clear browsing data", and it belongs to one browser on one
+         computer. Copy this text into an email to yourself once a
+         term and a cleared browser stops being a disaster. -->
+    <details class="editor-backup">
+      <summary>Back up or move your lists</summary>
+      <p class="editor-help">
+        This box holds every list as plain text. Copy it somewhere safe
+        &mdash; an email to yourself does fine. To put them back, or to
+        move them to another computer, paste the text in and press Load.
+      </p>
+      <textarea id="editor-backup-text" class="editor-words" rows="8"
+                spellcheck="false" autocomplete="off"></textarea>
+      <div class="editor-actions">
+        <button type="button" id="editor-load-text" class="small-button">
+          Load from this text
+        </button>
+        <button type="button" id="editor-reset" class="small-button danger-button">
+          Start over with the built-in lists
+        </button>
+      </div>
+    </details>
+
+    <p id="editor-status" class="editor-status">&nbsp;</p>
+
+    <button type="button" id="editor-done" class="big-button">Done</button>
   </section>
 
   <!-- ========== QUIZ ==========
@@ -131,7 +264,7 @@
          click-the-map games a second, bigger view of the crowded
          north-eastern states sits beside it - js/map.js fills that
          one in, and only for those games. -->
-    <div class="quiz-map-row">
+    <div class="quiz-map-row" id="quiz-map-row">
       <div id="quiz-map" class="map-frame"></div>
       <div id="quiz-zoom" class="map-frame zoom-frame" hidden>
         <p class="zoom-label">Northeastern Corridor - Zoom </p>
@@ -140,6 +273,26 @@
 
     <!-- The four answer buttons go in here (Modes 1, 4, 7). -->
     <div id="quiz-choices" class="choice-list"></div>
+
+    <!-- SAY IT AGAIN. The spelling game only: the word is spoken, not
+         written, so there has to be a way to hear it once more.
+         It is FREE and unlimited on purpose - hearing the question
+         again is the question being repeated, not help with the
+         answer. A spelling test she cannot hear is a hearing test. -->
+    <div id="quiz-listen" class="listen-area" hidden>
+      <button type="button" id="quiz-say-again" class="big-button listen-button">
+        &#128266; Say it again
+      </button>
+      <p class="listen-hint">Free &mdash; press it as often as you like.</p>
+
+      <!-- Shown only if the computer turns out to have no voice. The
+           word is NEVER put on screen instead: that would turn a
+           spelling test into a copying exercise without saying so. -->
+      <p id="quiz-no-voice" class="listen-trouble" hidden>
+        This computer has no voice installed, so the word cannot be read
+        out loud. Press Back and try the United States game instead.
+      </p>
+    </div>
 
     <!-- The spelling area (Modes 2, 3). The letter boxes go in
          quiz-letters; the tooltip pops up above them. -->
@@ -249,7 +402,7 @@
       <tbody>
         <tr><td>Quiz points</td><td id="results-quiz">0</td></tr>
         <tr><td>Coin points</td><td id="results-coins">0</td></tr>
-        <tr><td>Region bonus</td><td id="results-bonus">0</td></tr>
+        <tr><td id="results-bonus-label">Region bonus</td><td id="results-bonus">0</td></tr>
         <tr class="score-total"><td>Total</td><td id="results-total">0</td></tr>
       </tbody>
     </table>
@@ -292,6 +445,7 @@
 <!-- Data files. These are JavaScript, not JSON, so they load from file://. -->
 <script src="data/config.js"></script>
 <script src="data/states.js"></script>
+<script src="data/spelling.js"></script>
 
 <!-- The map picture. Also JavaScript, and for the same reason. -->
 <script src="assets/map/us-states-inline.js"></script>
@@ -302,11 +456,18 @@
 <!-- Helpers -->
 <script src="js/scores.js"></script>
 <script src="js/audio.js"></script>
+<script src="js/speech.js"></script>
 <script src="js/map.js"></script>
+<script src="js/spelling-store.js"></script>
+
+<!-- The list of games. Must come after the helpers above, because each
+     game says which of them it uses. -->
+<script src="js/games.js"></script>
 
 <!-- Game engines (these define things, they do not start anything) -->
 <script src="js/quiz.js"></script>
 <script src="js/runner.js"></script>
+<script src="js/list-editor.js"></script>
 
 <!-- Starts the app. Must come last: it uses everything above. -->
 <script src="js/main.js"></script>

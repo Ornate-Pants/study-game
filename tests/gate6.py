@@ -1,6 +1,7 @@
 """Drive Mode 9 (click the state on the map) in Chrome and check Gate 6."""
 import sys
 from playwright.sync_api import sync_playwright
+from browser import launch_args, is_noise
 from pathlib import Path
 
 # Where the game is, worked out from where THIS file is, so the
@@ -30,7 +31,7 @@ def start(page, mode, regions=(0,), debug=True):
     """Open the game and get a round of `mode` under way. mode is 1-based."""
     page.goto(URL + ("?debug=1" if debug else ""))
     page.wait_for_timeout(300)
-    page.click("#start-button")
+    page.click('.game-button[data-game="states"]')
     page.locator("#mode-list button").nth(mode - 1).click()
     page.wait_for_timeout(200)
     for i in regions:
@@ -187,7 +188,7 @@ def some_other_state(page, abbr, avoid=()):
 
 
 with sync_playwright() as p:
-    browser = p.chromium.launch(channel="chrome")
+    browser = p.chromium.launch(**launch_args())
     page = browser.new_page(viewport={"width": 1280, "height": 1100})
     page.on("console", lambda m: console.append(m.type + ": " + m.text))
     page.on("pageerror", lambda e: problems.append("pageerror: " + str(e)))
@@ -204,7 +205,7 @@ with sync_playwright() as p:
     # The version LITERAL belongs to gate7 now, which is the gate for the
     # build that carries it. Here it only has to be consistent with itself.
 
-    page.click("#start-button")
+    page.click('.game-button[data-game="states"]')
     page.wait_for_timeout(200)
     mode9 = page.locator("#mode-list button").nth(MODE_9 - 1)
     check("Mode 9 is on the menu", "Find the State" in mode9.inner_text(),
@@ -372,7 +373,7 @@ with sync_playwright() as p:
     # listener left switched on would answer questions nobody is asking.
     page.goto(URL + "?debug=1")
     page.wait_for_timeout(300)
-    page.click("#start-button")
+    page.click('.game-button[data-game="states"]')
     page.locator("#mode-list button").nth(MODE_9 - 1).click()
     page.wait_for_timeout(300)
     check("the map on Pick Your Regions is not clickable",
@@ -476,7 +477,7 @@ with sync_playwright() as p:
     page.goto(URL + "?debug=1")
     page.wait_for_timeout(300)
     page.evaluate("() => { CONFIG.zoomSmallStates = false; }")
-    page.click("#start-button")
+    page.click('.game-button[data-game="states"]')
     page.locator("#mode-list button").nth(MODE_9 - 1).click()
     page.wait_for_timeout(200)
     page.locator("#region-list input").nth(0).check()
@@ -510,7 +511,8 @@ with sync_playwright() as p:
 
     browser.close()
 
-bad = [c for c in console if c.startswith(("error", "warning"))]
+bad = [c for c in console
+       if c.startswith(("error", "warning")) and not is_noise(c)]
 check("console is clean (no errors or warnings)", not bad, str(bad[:3]))
 
 print("\n=== " + ("GATE 6: ALL CHECKS PASSED" if not problems

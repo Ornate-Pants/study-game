@@ -1,6 +1,7 @@
 """Drive real Mode 1 rounds in Chrome and check Gate 2 (and that Gate 1 still holds)."""
 import sys
 from playwright.sync_api import sync_playwright
+from browser import launch_args, is_noise
 from pathlib import Path
 
 # Where the game is, worked out from where THIS file is, so the
@@ -16,6 +17,20 @@ URL = GAME.joinpath("index.html").as_uri()
 problems = []
 
 
+def wait_for_runner(page, ms=15000):
+    """Wait until the bonus round is actually running.
+
+    Phaser needs a moment to boot, and how long depends entirely on the
+    machine - on a slow one it is well past any sleep worth writing. A
+    fixed wait here meant the round was ended before there was a round
+    to end, the results screen was never reached, and every check after
+    it failed for a reason that had nothing to do with it.
+    tests/README.md says it plainly: wait for the thing, do not sleep a
+    guessed amount.
+    """
+    page.wait_for_function("() => Runner.isRunning()", timeout=ms)
+
+
 def play_out_runner(page):
     """Start the bonus round and end it early.
 
@@ -24,7 +39,7 @@ def play_out_runner(page):
     it holds a short "Time!" pause before handing back to the results.
     """
     page.click("#start-runner-button")
-    page.wait_for_timeout(900)             # let Phaser boot
+    wait_for_runner(page)                  # let Phaser boot
     page.click("#finish-runner-button")    # debug button: end it now
     page.wait_for_timeout(1800)            # the "Time!" pause
 
@@ -74,7 +89,7 @@ def pick(page, text):
 def start_round(page, region_indexes, debug=True):
     page.goto(URL + ("?debug=1" if debug else ""))
     page.wait_for_timeout(300)
-    page.click("#start-button")
+    page.click('.game-button[data-game="states"]')
     page.click("#mode-list button:first-child")
     page.wait_for_timeout(200)
     for i in region_indexes:
@@ -85,7 +100,7 @@ def start_round(page, region_indexes, debug=True):
 
 
 with sync_playwright() as p:
-    browser = p.chromium.launch(channel="chrome")
+    browser = p.chromium.launch(**launch_args())
     page = browser.new_page(viewport={"width": 1280, "height": 1000})
     console = []
     page.on("console", lambda m: console.append(m.type + ": " + m.text))
@@ -298,7 +313,7 @@ with sync_playwright() as p:
 
     page2.goto(URL)
     page2.wait_for_timeout(250)
-    page2.click("#start-button")
+    page2.click('.game-button[data-game="states"]')
     page2.click("#mode-list button:first-child")
     page2.wait_for_timeout(200)
     page2.locator("#region-list input").nth(0).check()
@@ -311,7 +326,8 @@ with sync_playwright() as p:
 
     browser.close()
 
-bad = [c for c in console if c.startswith(("error", "warning"))]
+bad = [c for c in console
+       if c.startswith(("error", "warning")) and not is_noise(c)]
 check("console is clean (no errors or warnings)", not bad, str(bad[:3]))
 
 print("\n=== " + ("GATE 2: ALL CHECKS PASSED" if not problems

@@ -1,6 +1,7 @@
 """Drive the real game in a browser and check Gate 1 (and Gate 0 still passes)."""
 import sys
 from playwright.sync_api import sync_playwright
+from browser import launch_args, is_noise
 from pathlib import Path
 
 # Where the game is, worked out from where THIS file is, so the
@@ -15,6 +16,20 @@ URL = GAME.joinpath("index.html").as_uri()
 
 errors = []
 logs = []
+
+
+def wait_for_runner(page, ms=15000):
+    """Wait until the bonus round is actually running.
+
+    Phaser needs a moment to boot, and how long depends entirely on the
+    machine - on a slow one it is well past any sleep worth writing. A
+    fixed wait here meant the round was ended before there was a round
+    to end, the results screen was never reached, and every check after
+    it failed for a reason that had nothing to do with it.
+    tests/README.md says it plainly: wait for the thing, do not sleep a
+    guessed amount.
+    """
+    page.wait_for_function("() => Runner.isRunning()", timeout=ms)
 
 
 def fills(page):
@@ -41,7 +56,7 @@ def play_out_runner(page):
     it holds a short "Time!" pause before handing back to the results.
     """
     page.click("#start-runner-button")
-    page.wait_for_timeout(900)             # let Phaser boot
+    wait_for_runner(page)                  # let Phaser boot
     page.click("#finish-runner-button")    # debug button: end it now
     page.wait_for_timeout(1800)            # the "Time!" pause
 
@@ -60,20 +75,20 @@ def check(label, ok, detail=""):
 
 
 with sync_playwright() as p:
-    browser = p.chromium.launch(channel="chrome")
+    browser = p.chromium.launch(**launch_args())
     page = browser.new_page(viewport={"width": 1280, "height": 1000})
 
     page.on("console", lambda m: (
         logs.append(m.type + ": " + m.text),
         errors.append("console " + m.type + ": " + m.text)
-        if m.type in ("error", "warning") else None))
+        if m.type in ("error", "warning") and not is_noise(m.text) else None))
     page.on("pageerror", lambda e: errors.append("pageerror: " + str(e)))
 
     page.goto(URL + "?debug=1")
     page.wait_for_timeout(400)
 
     # --- walk to the region screen ---
-    page.click("#start-button")
+    page.click('.game-button[data-game="states"]')
     page.click("#mode-list button:first-child")
     page.wait_for_timeout(300)
 
@@ -167,7 +182,8 @@ with sync_playwright() as p:
     page2 = browser.new_page(viewport={"width": 1100, "height": 1200})
     page2.on("pageerror", lambda e: errors.append("map-test pageerror: " + str(e)))
     page2.on("console", lambda m: errors.append("map-test console " + m.type
-             + ": " + m.text) if m.type in ("error", "warning") else None)
+             + ": " + m.text)
+             if m.type in ("error", "warning") and not is_noise(m.text) else None)
     page2.goto(GAME.joinpath("map-test.html").as_uri())
     page2.wait_for_timeout(300)
     check("map-test: no FAIL lines",
