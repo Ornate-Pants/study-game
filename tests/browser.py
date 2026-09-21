@@ -64,3 +64,77 @@ IGNORED_CONSOLE = (
 def is_noise(text):
     """True if this console line is about the machine, not the game."""
     return any(bit in text for bit in IGNORED_CONSOLE)
+
+
+# ---------------------------------------------------------------------
+# Region helpers for the US game's gates (gate1.py-gate8.py).
+#
+# WHY THESE EXIST: data/states.js used to hold exactly 10 regions of
+# exactly 5 states each - uniform, by design. The gates were written
+# against that uniformity and it showed: tests picked a region by
+# clicking the Nth checkbox, and worked out how many questions a round
+# would have by simply writing the number 5 (or 10, for two regions).
+#
+# That broke the moment the regions were reorganized into 5 uneven
+# ones to match a real school's lists. Not because anything was wrong
+# with the reorganizing - states.js says right in its own header that
+# it's the one file meant to be edited for exactly this reason - but
+# because the TESTS had quietly started depending on a fact about the
+# data that was never actually guaranteed.
+#
+# These three helpers are how the gates stop depending on that fact.
+# Every gate file fixed from here on should use these instead of a
+# raw `.nth(n)` on the region checkboxes or a hand-typed count.
+# ---------------------------------------------------------------------
+
+def region_checkbox(page, region_id):
+    """The tick-box for one region, found by its REAL ID - never by
+    where it happens to sit on screen.
+
+    A region's on-screen position is just draw order; its id is the
+    number in data/states.js, and `main.js` writes that id onto the
+    checkbox's `value` attribute (see buildRegionSelect). Selecting by
+    value keeps working no matter how many regions there are, what
+    order they're listed in, or what they're named.
+    """
+    return page.locator(f'#region-list input[value="{region_id}"]')
+
+
+def check_regions(page, region_ids):
+    """Tick exactly these regions, by id. Doesn't touch any others -
+    call page.click("#clear-regions-button") first for a clean slate."""
+    for region_id in region_ids:
+        region_checkbox(page, region_id).check()
+
+
+def region_question_count(page, region_ids):
+    """How many questions a round over these regions will REALLY have,
+    read live from the game's own data instead of assumed.
+
+    This is the fix for the old "just write 5" habit: a round's size
+    was only ever 5 because the data happened to be uniform. Asking
+    the page directly means a test's expected count updates itself the
+    next time someone edits the region list, rather than going stale
+    silently like the hardcoded numbers did this time.
+    """
+    ids = [str(r) for r in region_ids]
+    return page.evaluate(
+        "(ids) => QUIZ_DATA.items.filter("
+        "  i => ids.includes(String(i.region))"
+        ").length",
+        ids)
+
+
+def safe_drive_to_tries(page, region_ids, spare=1):
+    """A `tries` budget for hunting through a shuffled round for one
+    particular state - generous enough to reach the end of it.
+
+    The old gates hardcoded `tries=6` for this, which was exactly
+    enough for a 5-state region and not nearly enough for an 11 or
+    12-state one: a search capped at 6 tries only has good odds of
+    finding something buried near position 11 by chance, not a
+    guarantee. This counts the region for real and adds a little
+    slack, so the search can always reach the last question if it has
+    to.
+    """
+    return region_question_count(page, region_ids) + spare
