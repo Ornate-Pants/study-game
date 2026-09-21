@@ -2,7 +2,7 @@
 import sys
 from playwright.sync_api import sync_playwright
 from browser import (launch_args, is_noise, check_regions, region_checkbox,
-                      region_question_count)
+                      region_question_count, region_abbrs)
 from pathlib import Path
 
 # Where the game is, worked out from where THIS file is, so the
@@ -47,24 +47,6 @@ def fills(page):
 def tinted(page):
     return sorted(a for a, f in fills(page).items()
                   if f != "rgb(216, 222, 233)")
-
-
-def region_abbrs(page, region_ids):
-    """Which states REALLY belong to these regions, read live from the
-    game's own data - the answer key for a tinting check.
-
-    Old versions of this test hand-typed a region's membership (e.g.
-    "New England is ME NH VT MA RI"), which was true right up until
-    someone edited data/states.js and it quietly wasn't. Reading it
-    live means the check still means something after the next edit,
-    the same way region_question_count() does for a round's size.
-    """
-    ids = [str(r) for r in region_ids]
-    return sorted(page.evaluate(
-        "(ids) => QUIZ_DATA.items.filter("
-        "  i => ids.includes(String(i.region))"
-        ").map(i => i.abbr)",
-        ids))
 
 
 def play_out_runner(page):

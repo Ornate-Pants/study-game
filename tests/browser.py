@@ -107,6 +107,24 @@ def check_regions(page, region_ids):
         region_checkbox(page, region_id).check()
 
 
+def region_abbrs(page, region_ids):
+    """Which states REALLY belong to these regions, read live from the
+    game's own data - the answer key for a tinting or membership check.
+
+    Old tests hand-typed a region's membership (e.g. "New England is
+    ME NH VT MA RI"), which was true right up until someone edited
+    data/states.js and it quietly wasn't. Reading it live means the
+    check still means something after the next edit, the same way
+    region_question_count() does for a round's size.
+    """
+    ids = [str(r) for r in region_ids]
+    return sorted(page.evaluate(
+        "(ids) => QUIZ_DATA.items.filter("
+        "  i => ids.includes(String(i.region))"
+        ").map(i => i.abbr)",
+        ids))
+
+
 def region_question_count(page, region_ids):
     """How many questions a round over these regions will REALLY have,
     read live from the game's own data instead of assumed.

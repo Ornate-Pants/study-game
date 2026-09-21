@@ -1,7 +1,8 @@
 """Drive real Mode 1 rounds in Chrome and check Gate 2 (and that Gate 1 still holds)."""
 import sys
 from playwright.sync_api import sync_playwright
-from browser import launch_args, is_noise
+from browser import (launch_args, is_noise, check_regions,
+                      region_question_count, region_abbrs)
 from pathlib import Path
 
 # Where the game is, worked out from where THIS file is, so the
@@ -86,14 +87,15 @@ def pick(page, text):
     page.locator(f'.choice-button[data-answer="{text}"]').click()
 
 
-def start_round(page, region_indexes, debug=True):
+def start_round(page, region_ids, debug=True):
+    """region_ids are real region ids from data/states.js (1, 2, ...),
+    not on-screen positions - see check_regions() in tests/browser.py."""
     page.goto(URL + ("?debug=1" if debug else ""))
     page.wait_for_timeout(300)
     page.click('.game-button[data-game="states"]')
     page.click("#mode-list button:first-child")
     page.wait_for_timeout(200)
-    for i in region_indexes:
-        page.locator("#region-list input").nth(i).check()
+    check_regions(page, region_ids)
     page.wait_for_timeout(250)
     page.click("#start-quiz-button")
     page.wait_for_timeout(300)
@@ -107,8 +109,10 @@ with sync_playwright() as p:
     page.on("pageerror", lambda e: problems.append("pageerror: " + str(e)))
 
     # ============ 1. A perfect 1-region round ============
-    start_round(page, [0])
-    check("1 region gives 5 questions", hud(page)[1] == "1 of 5", hud(page)[1])
+    start_round(page, [1])
+    n = region_question_count(page, [1])
+    cfg = page.evaluate("() => CONFIG")
+    check(f"1 region gives {n} questions", hud(page)[1] == f"1 of {n}", hud(page)[1])
     check("map is on the quiz screen",
           page.locator("#quiz-map svg.us-map").count() == 1)
 
@@ -129,7 +133,7 @@ with sync_playwright() as p:
           str(rows) + " rows")
 
     seen_order = []
-    for q in range(5):
+    for q in range(n):
         a = answer(page)
         seen_order.append(a)
         opts = [c[0] for c in choices(page)]
@@ -144,14 +148,15 @@ with sync_playwright() as p:
         pick(page, a)
         page.wait_for_timeout(1300)   # feedbackSeconds = 1
 
-    check("perfect 5-question round scores exactly 25",
-          page.locator("#summary-points").inner_text() == "25",
+    perfect_score = n * cfg["basePoints"]
+    check(f"perfect {n}-question round scores exactly {perfect_score}",
+          page.locator("#summary-points").inner_text() == str(perfect_score),
           page.locator("#summary-points").inner_text())
-    check("summary shows 5 of 5 first try",
-          page.locator("#summary-firsttry").inner_text() == "5 of 5",
+    check(f"summary shows {n} of {n} first try",
+          page.locator("#summary-firsttry").inner_text() == f"{n} of {n}",
           page.locator("#summary-firsttry").inner_text())
-    check("25 points becomes 25 seconds of running",
-          page.locator("#summary-seconds").inner_text() == "25")
+    check(f"{perfect_score} points becomes {perfect_score} seconds of running",
+          page.locator("#summary-seconds").inner_text() == str(perfect_score))
     check("Back button is hidden once the round is under way",
           page.locator("#back-button").is_hidden())
     check("the ring is put away when the round ends",
@@ -170,12 +175,16 @@ with sync_playwright() as p:
     # results math unchanged from Phase 0
     play_out_runner(page)
     quiz, coins, bonus, total = results_add_up(page)
-    check("results math: 25 quiz + coins + 10 region bonus",
-          quiz == 25 and bonus == 10 and total == quiz + coins + bonus,
+    expected_bonus = cfg["regionBonusPerRegion"]    # exactly 1 region picked
+    check(f"results math: {perfect_score} quiz + coins + "
+          f"{expected_bonus} region bonus",
+          quiz == perfect_score and bonus == expected_bonus
+          and total == quiz + coins + bonus,
           f"{quiz} + {coins} + {bonus} = {total}")
 
     # ============ 2. Second chance is worth half ============
-    start_round(page, [0])
+    start_round(page, [1])
+    n = region_question_count(page, [1])
     a = answer(page)
     wrong = [c[0] for c in choices(page) if c[0] != a][0]
 
@@ -187,7 +196,7 @@ with sync_playwright() as p:
     check("the wrong button is marked red", "is-wrong" in after[wrong][2])
     check("the other three stay clickable",
           sum(1 for c in choices(page) if not c[1]) == 3)
-    check("the question has not moved on", hud(page)[1] == "1 of 5", hud(page)[1])
+    check("the question has not moved on", hud(page)[1] == f"1 of {n}", hud(page)[1])
     page.screenshot(path=str(SHOTS / "g2-first-miss.png"), full_page=True)
 
     pick(page, a)
@@ -196,7 +205,8 @@ with sync_playwright() as p:
           hud(page)[0] == 3, str(hud(page)))
 
     # ============ 3. Wrong twice = 0, answer revealed, no repeat ============
-    start_round(page, [0])
+    start_round(page, [1])
+    n = region_question_count(page, [1])
     a2 = answer(page)
     missed_abbr = page.evaluate("() => Quiz.getState().current.abbr")
     wrongs = [c[0] for c in choices(page) if c[0] != a2]
@@ -236,58 +246,70 @@ with sync_playwright() as p:
 
     # Phase 4B: the reveal pause was shortened from 3s to 2s.
     while _t.time() - revealed_at < 6:
-        if hud(page)[1] == "2 of 5":
+        if hud(page)[1] == f"2 of {n}":
             break
         page.wait_for_timeout(50)
     waited = _t.time() - revealed_at
     check("it moves on by itself after the reveal",
-          hud(page)[1] == "2 of 5", hud(page)[1])
+          hud(page)[1] == f"2 of {n}", hud(page)[1])
     check("the reveal pause is the shortened ~2 seconds, not 3",
           1.4 < waited < 2.9, str(round(waited, 2)) + "s")
 
-    # finish the round and confirm the missed state never returns
+    # finish the round and confirm the missed state never returns. One
+    # question is already resolved (missed, worth 0); the rest of the
+    # region is still to come.
+    remaining = n - 1
     rest = []
-    for _ in range(4):
+    for _ in range(remaining):
         rest.append(page.evaluate("() => Quiz.getState().current.abbr"))
         pick(page, answer(page))
         page.wait_for_timeout(1300)
 
     check("a missed question is not asked again",
           missed_abbr not in rest, missed_abbr + " in " + str(rest))
-    check("4 right out of 5 after one blown question = 20 points",
-          page.locator("#summary-points").inner_text() == "20",
+    clean_score = remaining * cfg["basePoints"]
+    check(f"{remaining} right out of {n} after one blown question = "
+          f"{clean_score} points",
+          page.locator("#summary-points").inner_text() == str(clean_score),
           page.locator("#summary-points").inner_text())
-    check("summary counts 4 of 5 on the first try",
-          page.locator("#summary-firsttry").inner_text() == "4 of 5",
+    check(f"summary counts {remaining} of {n} on the first try",
+          page.locator("#summary-firsttry").inner_text()
+          == f"{remaining} of {n}",
           page.locator("#summary-firsttry").inner_text())
 
     # ============ 4. Two regions ============
-    start_round(page, [0, 9])
-    check("2 regions give 10 questions", hud(page)[1] == "1 of 10", hud(page)[1])
-    for _ in range(10):
+    start_round(page, [1, 5])
+    n2 = region_question_count(page, [1, 5])
+    check(f"2 regions give {n2} questions", hud(page)[1] == f"1 of {n2}",
+          hud(page)[1])
+    for _ in range(n2):
         pick(page, answer(page))
         page.wait_for_timeout(1300)
-    check("perfect 10-question round scores exactly 50",
-          page.locator("#summary-points").inner_text() == "50",
+    two_region_score = n2 * cfg["basePoints"]
+    check(f"perfect {n2}-question round scores exactly {two_region_score}",
+          page.locator("#summary-points").inner_text() == str(two_region_score),
           page.locator("#summary-points").inner_text())
     play_out_runner(page)
     quiz, coins, bonus, total = results_add_up(page)
-    check("2-region results math: 50 quiz + coins + 20 region bonus",
-          quiz == 50 and bonus == 20 and total == quiz + coins + bonus,
+    two_region_bonus = 2 * cfg["regionBonusPerRegion"]
+    check(f"2-region results math: {two_region_score} quiz + coins + "
+          f"{two_region_bonus} region bonus",
+          quiz == two_region_score and bonus == two_region_bonus
+          and total == quiz + coins + bonus,
           f"{quiz} + {coins} + {bonus} = {total}")
 
     # ============ 5. Keyboard, shuffling, distractor quality ============
-    start_round(page, [0])
+    start_round(page, [1])
     first_of = [page.evaluate("() => Quiz.getState().current.abbr")]
     page.keyboard.press("1")
     page.wait_for_timeout(400)
     check("number keys pick an answer",
-          hud(page)[0] in (0, 5) and any(
+          hud(page)[0] in (0, cfg["basePoints"]) and any(
               c[1] for c in choices(page)), str(choices(page)))
 
     orders = []
     for _ in range(6):
-        start_round(page, [0])
+        start_round(page, [1])
         orders.append(page.evaluate(
             "() => [Quiz.getState().current, ...Quiz.getState().queue]"
             ".map(s => s.abbr).join('')"))
@@ -295,8 +317,7 @@ with sync_playwright() as p:
           len(set(orders)) > 1, str(len(set(orders))) + " distinct orders of 6")
 
     # distractors should come from the same region when one region is in play
-    start_round(page, [0])
-    ne = {"ME", "NH", "VT", "MA", "RI"}
+    start_round(page, [1])
     names_in_region = page.evaluate(
         "() => QUIZ_DATA.items.filter(i => i.region === 1).map(i => i.name)")
     opts = [c[0] for c in choices(page)]
@@ -316,13 +337,13 @@ with sync_playwright() as p:
     page2.click('.game-button[data-game="states"]')
     page2.click("#mode-list button:first-child")
     page2.wait_for_timeout(200)
-    page2.locator("#region-list input").nth(0).check()
+    check_regions(page2, [1])
     page2.wait_for_timeout(350)
     tint = page2.evaluate("""() => [...document.querySelectorAll('.us-map [data-abbr]')]
         .filter(e => getComputedStyle(e).fill !== 'rgb(216, 222, 233)')
         .map(e => e.getAttribute('data-abbr')).sort()""")
     check("Gate 1: region tinting still works",
-          tint == ["MA", "ME", "NH", "RI", "VT"], str(tint))
+          tint == region_abbrs(page2, [1]), str(tint))
 
     browser.close()
 
