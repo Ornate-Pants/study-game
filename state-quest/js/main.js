@@ -143,10 +143,15 @@ const App = (function () {
       || (NO_BACK_SCREENS.indexOf(currentScreen) !== -1);
   }
 
-  // Used by "Play Again": clears the trail so Back doesn't walk
-  // backwards through a round that is already finished.
+  // Used by "Play Again": throws away the trail through the round that
+  // just finished, so Back can never step into the old quiz, summary,
+  // runner or results screen. It does not leave Back with nowhere to
+  // go, though - it reseeds the trail with "game-select", exactly what
+  // history would hold the first time mode-select is ever shown. Back
+  // from mode-select should behave the same whichever way you arrived.
   function resetHistory() {
     history.length = 0;
+    history.push("game-select");
     updateBackButton();
   }
 
