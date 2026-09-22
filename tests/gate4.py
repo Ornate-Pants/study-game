@@ -1,7 +1,7 @@
 """Drive the Phaser bonus round in Chrome and check Gate 4."""
 import sys
 from playwright.sync_api import sync_playwright
-from browser import launch_args, is_noise
+from browser import launch_args, is_noise, check_regions, region_question_count
 from pathlib import Path
 import time
 import math
@@ -354,23 +354,26 @@ with sync_playwright() as p:
     page.click('.game-button[data-game="states"]')
     page.locator("#mode-list button").nth(0).click()
     page.wait_for_timeout(200)
-    page.locator("#region-list input").nth(0).check()
+    check_regions(page, [1])
     page.wait_for_timeout(250)
     page.click("#start-quiz-button")
     page.wait_for_timeout(300)
-    for _ in range(5):
+    n = region_question_count(page, [1])
+    for _ in range(n):
         correct = page.evaluate(
             "() => { const s = Quiz.getState(); return s.current[s.rules.asks]; }")
         page.locator(f'.choice-button[data-answer="{correct}"]').click()
         page.wait_for_timeout(1250)
 
-    check("a perfect round still scores 25 in the quiz",
-          page.locator("#summary-points").inner_text() == "25")
+    expected_score = n * cfg["basePoints"]
+    check(f"a perfect round still scores {expected_score} in the quiz",
+          page.locator("#summary-points").inner_text() == str(expected_score))
     page.click("#start-runner-button")
     page.wait_for_timeout(800)
     s = st(page)
     check("the runner timer starts at the quiz score",
-          23 < s["secondsLeft"] <= 25, str(round(s["secondsLeft"], 1)))
+          expected_score - 2 < s["secondsLeft"] <= expected_score,
+          str(round(s["secondsLeft"], 1)))
 
     page.wait_for_timeout(3000)
     coins_now = st(page)["coins"]
