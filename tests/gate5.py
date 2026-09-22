@@ -1,7 +1,7 @@
 """Gate 5 - the v1.0 ship gate: high scores, sound, art, persistence."""
 import sys
 from playwright.sync_api import sync_playwright
-from browser import launch_args, is_noise
+from browser import launch_args, is_noise, check_regions, region_question_count
 from pathlib import Path
 import shutil
 
@@ -40,16 +40,23 @@ def check(label, ok, detail=""):
 
 
 def play_round(page, wrong_on_purpose=0):
-    """Play a full Mode 1 round and end the bonus round early."""
+    """Play a full Mode 1 round over region 1 and end the bonus round
+    early. Every check downstream of this reads its expected values
+    live (a saved score against the results screen, a count of rows
+    saved) rather than assuming a specific total, so the only thing
+    that has to stay right here is that the round actually finishes -
+    which means answering exactly as many questions as region 1
+    really has, not a number that used to be true of every region."""
     page.click('.game-button[data-game="states"]')
     page.locator("#mode-list button").nth(0).click()
     page.wait_for_timeout(200)
-    page.locator("#region-list input").nth(0).check()
+    check_regions(page, [1])
     page.wait_for_timeout(250)
     page.click("#start-quiz-button")
     page.wait_for_timeout(300)
 
-    for q in range(5):
+    n = region_question_count(page, [1])
+    for q in range(n):
         correct = page.evaluate(
             "() => { const s = Quiz.getState(); return s.current[s.rules.asks]; }")
         if q < wrong_on_purpose:
