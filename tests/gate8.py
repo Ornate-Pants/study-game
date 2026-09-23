@@ -15,7 +15,7 @@ letter-by-letter checking are all feedback too.
 """
 import sys
 from playwright.sync_api import sync_playwright
-from browser import launch_args, is_noise
+from browser import launch_args, is_noise, region_question_count
 from pathlib import Path
 
 # Where the game is, worked out from where THIS file is, so the
@@ -28,9 +28,15 @@ SHOTS = Path(__file__).resolve().parent / "_output"
 SHOTS.mkdir(exist_ok=True)
 URL = GAME.joinpath("index.html").as_uri()
 
-# Region checkboxes, in the order they appear in data/states.js.
+# Region checkboxes, in the order they appear in data/states.js. The
+# regions were regrouped to match a real school's lists (5 uneven
+# regions, not 10 uniform ones) - NEW_ENGLAND now really means
+# "Northeast" (11 states) and GREAT_LAKES really means "Midwest"
+# (12 states), but the names are kept so this file, which reads "New
+# England" and "Great Lakes" throughout, doesn't need a rename just
+# because the data moved on.
 NEW_ENGLAND = 0
-GREAT_LAKES = 5      # holds Minnesota, the only state with an alternate
+GREAT_LAKES = 2       # holds Minnesota, the only state with an alternate
 
 problems = []
 console = []
@@ -224,6 +230,13 @@ with sync_playwright() as p:
     cfg = page.evaluate("() => CONFIG")
     FULL = cfg["basePoints"]
 
+    # How many questions a round over NEW_ENGLAND / GREAT_LAKES really
+    # has, read live rather than assumed - see browser.py's own note on
+    # why "just write 5" stopped being safe once the regions were
+    # regrouped to match a real school's uneven lists.
+    n1 = region_question_count(page, [NEW_ENGLAND + 1])   # Northeast, 11
+    n3 = region_question_count(page, [GREAT_LAKES + 1])   # Midwest, 12
+
     check("the title screen shows the version",
           page.locator("#version-tag").inner_text() == "v" + cfg["APP_VERSION"],
           page.locator("#version-tag").inner_text())
@@ -317,7 +330,7 @@ with sync_playwright() as p:
           and page.locator("#quiz-feedback").inner_text().strip() == "",
           repr(page.locator("#quiz-feedback").inner_text()))
     check("it moves straight on, with no green-flash pause",
-          hud(page) == "2 of 5", hud(page))
+          hud(page) == f"2 of {n1}", hud(page))
     check("a wrong answer scored nothing", points(page) == 0, str(points(page)))
 
     rows = record(page)
@@ -332,7 +345,7 @@ with sync_playwright() as p:
     put(page, want)
     page.keyboard.press("Enter")
     page.wait_for_timeout(350)
-    check("Enter submits", hud(page) == "3 of 5", hud(page))
+    check("Enter submits", hud(page) == f"3 of {n1}", hud(page))
     check("a right answer is worth the full basePoints",
           points(page) == FULL, str(points(page)))
 
@@ -398,7 +411,7 @@ with sync_playwright() as p:
     page.wait_for_timeout(350)
 
     check("a skip counts as FINISHED with - nothing comes back",
-          hud(page) == "4 of 5", hud(page))
+          hud(page) == f"4 of {n1}", hud(page))
     check("nothing was put in the come-back queue",
           page.evaluate("() => Quiz.getState().comeBack").__len__() == 0)
     rows = record(page)
@@ -413,11 +426,12 @@ with sync_playwright() as p:
           [r["key"] for r in record(page)].count(skipped_abbr) == 1,
           str([r["key"] for r in record(page)]))
     check("every question appears exactly once",
-          len(record(page)) == 5 and len(set(r["key"] for r in record(page))) == 5)
+          len(record(page)) == n1
+          and len(set(r["key"] for r in record(page))) == n1)
 
     # ============ 5. The review screen ============
     check("the review is shown", page.locator("#exam-review").is_visible())
-    check("one row per question", page.locator(".review-row").count() == 5,
+    check("one row per question", page.locator(".review-row").count() == n1,
           str(page.locator(".review-row").count()))
     check("the heading says it was an exam",
           "Exam" in page.locator("#summary-title").inner_text(),
@@ -443,7 +457,7 @@ with sync_playwright() as p:
 
     tally = page.locator(".review-tally").first.inner_text()
     got = sum(1 for r in rows if r["right"])
-    check("the per-region tally adds up", tally == f"{got} of 5",
+    check("the per-region tally adds up", tally == f"{got} of {n1}",
           tally + " vs " + str(got) + " right")
     check("quiz points are still basePoints per right answer",
           page.locator("#summary-points").inner_text() == str(got * FULL),
@@ -456,7 +470,10 @@ with sync_playwright() as p:
     start(page, 5, regions=(GREAT_LAKES,))
     # here() rather than reading current.abbr directly: the engine drops
     # `current` to null the moment a round ends, and .abbr off null throws.
-    for _ in range(5):
+    # The budget has to reach the LAST question of the region, not a
+    # guessed handful of tries - Minnesota can shuffle to any of the 12
+    # Midwest spots, this region's own size plus one for a spare check.
+    for _ in range(n3 + 1):
         if here(page)[0] == "MN":
             break
         answer_typed(page)
@@ -566,8 +583,9 @@ with sync_playwright() as p:
     play_out(page, answer_choice)
 
     quiz_points = int(page.locator("#summary-points").inner_text())
-    check("a perfect 2-region exam scores 10 x basePoints",
-          quiz_points == 10 * FULL, str(quiz_points))
+    expected_2region = (n1 + n3) * FULL
+    check(f"a perfect 2-region exam scores {n1 + n3} x basePoints",
+          quiz_points == expected_2region, str(quiz_points))
 
     page.click("#start-runner-button")
     wait_for_runner(page)
@@ -634,10 +652,12 @@ with sync_playwright() as p:
           + " marks for 2 scores, 1 of them an exam")
 
     # ============ 11. The longest review there can be ============
-    # Ten regions is fifty rows. On an ordinary 1366 x 768 laptop that is
-    # far more than fits, and the thing that must NOT be pushed off the
-    # bottom is the button. This is the trap the click-mode map fell into
-    # in Phase 6, and it is worth a standing check rather than a memory.
+    # All the regions together are fifty rows, however many regions
+    # they are currently split into. On an ordinary 1366 x 768 laptop
+    # that is far more than fits, and the thing that must NOT be
+    # pushed off the bottom is the button. This is the trap the
+    # click-mode map fell into in Phase 6, and it is worth a standing
+    # check rather than a memory.
     small = browser.new_page(viewport={"width": 1366, "height": 768})
     small.on("pageerror", lambda e: problems.append("long review: " + str(e)))
 
@@ -667,10 +687,13 @@ with sync_playwright() as p:
         asked += 1
 
     small.wait_for_timeout(500)
-    check("a ten-region exam asks all 50", asked == 50, str(asked))
+    region_count = small.evaluate(
+        "() => Object.keys(QUIZ_DATA.regions).length")
+    check("an all-regions exam asks all 50", asked == 50, str(asked))
     check("the review lists all 50", small.locator(".review-row").count() == 50,
           str(small.locator(".review-row").count()))
-    check("one heading per region", small.locator(".review-region").count() == 10,
+    check(f"one heading per region ({region_count} of them)",
+          small.locator(".review-region").count() == region_count,
           str(small.locator(".review-region").count()))
 
     # Every region's tally, summed, must equal the number he got right.
