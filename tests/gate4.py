@@ -376,8 +376,21 @@ with sync_playwright() as p:
           str(round(s["secondsLeft"], 1)))
 
     page.wait_for_timeout(3000)
-    coins_now = st(page)["coins"]
-    page.click("#finish-runner-button")          # debug: end early
+    # Read the coin count and press Finish in the SAME script tick, not two
+    # separate round trips. Phaser's game loop keeps running between a
+    # page.evaluate() and a page.click() - both cross back to Python and
+    # back - so a coin could be picked up in that gap, sampled "before"
+    # would then read low against what the round actually hands back.
+    # Seen once in a full run-all.py pass: 1 coin sampled, 2 coins (10 pts)
+    # on the results screen. This coin-related failure did not reproduce
+    # in 5 runs once fixed this way (an unrelated flake, the runner's
+    # own "pit freeze" timing check, showed up once in that same batch -
+    # see tests/README.md's own note on measurement checks being fiddly).
+    coins_now = page.evaluate("""() => {
+        const before = Runner.debugState().coins;
+        document.getElementById('finish-runner-button').click();
+        return before;
+    }""")
     page.wait_for_timeout(1500)
 
     check("ending the round reaches the results screen",
