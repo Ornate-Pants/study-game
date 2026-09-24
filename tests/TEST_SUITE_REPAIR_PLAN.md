@@ -3,6 +3,14 @@
 **Written:** 2026-09-21, after a manual read-only audit (no code changed yet).
 **Status:** Planning only. Nothing in `tests/gate1.py`–`gate8.py` has been touched.
 
+> **COMPLETE as of 2026-09-24.** Every session in this plan (Day 1 through Day
+> 3, Session 3d) has been run: gates 1–8 were fixed, `SPEC.md`'s region
+> documentation was resynced, and a real coin-count race condition found
+> during the final verification pass was fixed in `gate4.py`. `python3
+> tests/run-all.py` passes all nine gates clean. This file is kept for
+> historical record of how the repair was planned and carried out - it does
+> not describe outstanding work.
+
 ## Why this file exists
 
 Fixing this properly means touching six test files and ~50 individual checks —
