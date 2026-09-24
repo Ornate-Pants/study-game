@@ -89,16 +89,11 @@ const QUIZ_DATA = {
     "mapAsset": "assets/map/us-states.svg"
   },
   "regions": {
-    "1":  "New England",
-    "2":  "Mid-Atlantic",
-    "3":  "South Atlantic",
-    "4":  "Deep South",
-    "5":  "Appalachia & Ohio Valley",
-    "6":  "Great Lakes",
-    "7":  "Great Plains",
-    "8":  "Southwest",
-    "9":  "Mountain West",
-    "10": "Pacific"
+    "1": "Northeast",
+    "2": "Southeast",
+    "3": "Midwest",
+    "4": "Southwest",
+    "5": "West"
   },
   "items": [
     {
@@ -114,27 +109,31 @@ const QUIZ_DATA = {
 ```
 
 Rules:
-- `region` is an integer 1-10 so you can re-map to the teacher's regions by editing one number per state.
+- `region` is an integer matching one of the ids in `regions` above, so you can re-map to the
+  teacher's regions by editing one number per state - there is no fixed number of regions, and
+  none is assumed anywhere in the engine or the tests.
 - `abbr` doubles as the SVG element id, keeping map lookup trivial.
 - `capitalAlternates` handles legitimate spelling variants (Saint Paul / St. Paul). Comparison rules in Section 6.
-- Exactly 5 states per region in the initial data (see Appendix A) so rounds stay short.
+- Regions do not have to be the same size (see Appendix A). A round's length is however many
+  states are in the regions picked, read live rather than assumed.
 
 ---
 
-## 5. Regions (initial assignment, baked in now, re-map later if needed)
+## 5. Regions (re-mapped once already; expect it to happen again)
+
+The table below is whatever `data/states.js` currently ships - it has already been re-grouped
+once, from the original 10 evenly-sized regions to the 5 uneven ones shown here, to match a real
+school's own lists. That is the point of keeping `region` a plain integer per state: nothing else
+in the engine, the config, or the tests assumes a particular number of regions or a particular
+size for any of them, so this table can be edited again the same way without touching code.
 
 | # | Region | States |
 |---|--------|--------|
-| 1 | New England | ME, NH, VT, MA, RI |
-| 2 | Mid-Atlantic | CT, NY, NJ, PA, DE |
-| 3 | South Atlantic | MD, VA, NC, SC, GA |
-| 4 | Deep South | FL, AL, MS, LA, AR |
-| 5 | Appalachia & Ohio Valley | WV, KY, TN, OH, IN |
-| 6 | Great Lakes | MI, IL, WI, MN, IA |
-| 7 | Great Plains | MO, KS, NE, SD, ND |
-| 8 | Southwest | TX, OK, NM, AZ, NV |
-| 9 | Mountain West | CO, UT, WY, MT, ID |
-| 10 | Pacific | WA, OR, CA, AK, HI |
+| 1 | Northeast | ME, NH, VT, MA, RI, CT, NY, NJ, PA, DE, MD |
+| 2 | Southeast | VA, NC, SC, GA, FL, AL, MS, LA, AR, WV, KY, TN |
+| 3 | Midwest | OH, IN, MI, IL, WI, MN, IA, MO, KS, NE, SD, ND |
+| 4 | Southwest | TX, OK, NM, AZ |
+| 5 | West | NV, CO, UT, WY, MT, ID, WA, OR, CA, AK, HI |
 
 ---
 
@@ -225,8 +224,8 @@ const CONFIG = {
   basePoints: 5,              // flat points for a first-try correct answer,
                                // same value no matter how many regions are picked
   regionBonusPerRegion: 10,    // added ONCE to the final combined score, not
-                               // per question. 1 region=10, 3 regions=30,
-                               // 10 regions (all states)=100
+                               // per question, per region picked - 3 regions
+                               // picked = 30, however many states are in them
   hintDelaySeconds: 8,         // hint button appears after this
   penaltyPoints: 2,            // flat cost of needing a second chance, whether
                                // that was a hint, a skip, or a 2nd pick.
@@ -380,7 +379,8 @@ Project structure, `index.html` loading everything via script tags from `file://
 
 ### Phase 1: Map + Data (v1.0) — DONE, gate passed
 Acquire and integrate the SVG per Section 10. Build the highlight test page. Region select screen with live map preview (selected regions' states tinted).
-**GATE 1:** All 50 states highlight correctly; region checkboxes tint the right 5 states each.
+**GATE 1:** All 50 states highlight correctly; region checkboxes tint the right states for that
+region, whatever its size.
 
 ### Phase 2: Quiz Engine, Mode 1 (v1.0) — DONE, gate passed
 Question queue, shuffling, MC rendering, 2nd-chance logic, scoring per Section 8 (flat `basePoints` per question; the region bonus is added once at the results screen and never during the quiz), the flat second-chance penalty, reveal/retire, green/red feedback, round summary screen.
@@ -639,14 +639,14 @@ answer is marked.
   he was wrong — the right answer. A skipped question shows the right answer with a blank where
   his would have been.
 - **A per-region tally**, which is what tells you where to focus:
-  *"Great Lakes 5/5 · New England 3/5 · Pacific 4/5"*.
+  *"Midwest 9 of 12 · Northeast 8 of 11"*.
 
 > **Built grouped by region, not "in order" as this section first said** (a deliberate call, Phase 8).
 > Each region is a heading carrying its own tally, with its questions underneath. The reason for
 > the change is the reason the tally exists: it is there to say where to focus, and grouping puts
-> every wrong answer directly under the heading that counts it. A ten-region exam is fifty rows,
-> and in one flat list the four he got wrong are scattered through it. Order *within* each region
-> is still the order he answered them.
+> every wrong answer directly under the heading that counts it. An all-regions exam is fifty rows
+> however many regions those 50 states are currently split into, and in one flat list the ones he
+> got wrong are scattered through it. Order *within* each region is still the order he answered them.
 - Then **"Start Bonus Round!"** as usual. Quiz points still become running seconds, so the
   exam still earns playing time.
 
@@ -770,7 +770,7 @@ A spelling round and a states round were never the same thing to rank against ea
 ---
 
 
-## Appendix A: Full State Data (authoritative, do not invent values)
+## Appendix A: Full State Data (authoritative, do not invent values - mirrors `data/states.js`)
 
 | State | Abbr | Capital | Region | Capital Alternates |
 |-------|------|---------|--------|--------------------|
@@ -779,51 +779,51 @@ A spelling round and a states round were never the same thing to rank against ea
 | Vermont | VT | Montpelier | 1 | |
 | Massachusetts | MA | Boston | 1 | |
 | Rhode Island | RI | Providence | 1 | |
-| Connecticut | CT | Hartford | 2 | |
-| New York | NY | Albany | 2 | |
-| New Jersey | NJ | Trenton | 2 | |
-| Pennsylvania | PA | Harrisburg | 2 | |
-| Delaware | DE | Dover | 2 | |
-| Maryland | MD | Annapolis | 3 | |
-| Virginia | VA | Richmond | 3 | |
-| North Carolina | NC | Raleigh | 3 | |
-| South Carolina | SC | Columbia | 3 | |
-| Georgia | GA | Atlanta | 3 | |
-| Florida | FL | Tallahassee | 4 | |
-| Alabama | AL | Montgomery | 4 | |
-| Mississippi | MS | Jackson | 4 | |
-| Louisiana | LA | Baton Rouge | 4 | |
-| Arkansas | AR | Little Rock | 4 | |
-| West Virginia | WV | Charleston | 5 | |
-| Kentucky | KY | Frankfort | 5 | |
-| Tennessee | TN | Nashville | 5 | |
-| Ohio | OH | Columbus | 5 | |
-| Indiana | IN | Indianapolis | 5 | |
-| Michigan | MI | Lansing | 6 | |
-| Illinois | IL | Springfield | 6 | |
-| Wisconsin | WI | Madison | 6 | |
-| Minnesota | MN | Saint Paul | 6 | St. Paul |
-| Iowa | IA | Des Moines | 6 | |
-| Missouri | MO | Jefferson City | 7 | |
-| Kansas | KS | Topeka | 7 | |
-| Nebraska | NE | Lincoln | 7 | |
-| South Dakota | SD | Pierre | 7 | |
-| North Dakota | ND | Bismarck | 7 | |
-| Texas | TX | Austin | 8 | |
-| Oklahoma | OK | Oklahoma City | 8 | |
-| New Mexico | NM | Santa Fe | 8 | |
-| Arizona | AZ | Phoenix | 8 | |
-| Nevada | NV | Carson City | 8 | |
-| Colorado | CO | Denver | 9 | |
-| Utah | UT | Salt Lake City | 9 | |
-| Wyoming | WY | Cheyenne | 9 | |
-| Montana | MT | Helena | 9 | |
-| Idaho | ID | Boise | 9 | |
-| Washington | WA | Olympia | 10 | |
-| Oregon | OR | Salem | 10 | |
-| California | CA | Sacramento | 10 | |
-| Alaska | AK | Juneau | 10 | |
-| Hawaii | HI | Honolulu | 10 | |
+| Connecticut | CT | Hartford | 1 | |
+| New York | NY | Albany | 1 | |
+| New Jersey | NJ | Trenton | 1 | |
+| Pennsylvania | PA | Harrisburg | 1 | |
+| Delaware | DE | Dover | 1 | |
+| Maryland | MD | Annapolis | 1 | |
+| Virginia | VA | Richmond | 2 | |
+| North Carolina | NC | Raleigh | 2 | |
+| South Carolina | SC | Columbia | 2 | |
+| Georgia | GA | Atlanta | 2 | |
+| Florida | FL | Tallahassee | 2 | |
+| Alabama | AL | Montgomery | 2 | |
+| Mississippi | MS | Jackson | 2 | |
+| Louisiana | LA | Baton Rouge | 2 | |
+| Arkansas | AR | Little Rock | 2 | |
+| West Virginia | WV | Charleston | 2 | |
+| Kentucky | KY | Frankfort | 2 | |
+| Tennessee | TN | Nashville | 2 | |
+| Ohio | OH | Columbus | 3 | |
+| Indiana | IN | Indianapolis | 3 | |
+| Michigan | MI | Lansing | 3 | |
+| Illinois | IL | Springfield | 3 | |
+| Wisconsin | WI | Madison | 3 | |
+| Minnesota | MN | Saint Paul | 3 | St. Paul |
+| Iowa | IA | Des Moines | 3 | |
+| Missouri | MO | Jefferson City | 3 | |
+| Kansas | KS | Topeka | 3 | |
+| Nebraska | NE | Lincoln | 3 | |
+| South Dakota | SD | Pierre | 3 | |
+| North Dakota | ND | Bismarck | 3 | |
+| Texas | TX | Austin | 4 | |
+| Oklahoma | OK | Oklahoma City | 4 | |
+| New Mexico | NM | Santa Fe | 4 | |
+| Arizona | AZ | Phoenix | 4 | |
+| Nevada | NV | Carson City | 5 | |
+| Colorado | CO | Denver | 5 | |
+| Utah | UT | Salt Lake City | 5 | |
+| Wyoming | WY | Cheyenne | 5 | |
+| Montana | MT | Helena | 5 | |
+| Idaho | ID | Boise | 5 | |
+| Washington | WA | Olympia | 5 | |
+| Oregon | OR | Salem | 5 | |
+| California | CA | Sacramento | 5 | |
+| Alaska | AK | Juneau | 5 | |
+| Hawaii | HI | Honolulu | 5 | |
 
 ---
 
@@ -834,12 +834,12 @@ A spelling round and a states round were never the same thing to rank against ea
 3. **Stun keeps the countdown running** rather than adding a separate time penalty; losing 3+ seconds of collecting IS the cost.
 4. **Region bonus:** flat `10 * regionCount`, added once at the end of the round (not per-question, not compounded). Per-question value is always flat `basePoints`; more regions only lengthens the round by adding more questions. The hint/skip penalty values were flagged here as un-retuned; **these have since been settled** — one flat `penaltyPoints: 2` for every kind of second chance. See Section 8.
 5. **Distractor choices** in MC modes prefer same-region states so the quiz teaches discrimination between neighbors.
-6. **Region groupings** in Section 5 are approved placeholders; teacher regions will be re-mapped by editing `region` integers only.
+6. **Region groupings** in Section 5 are approved placeholders; teacher regions will be re-mapped by editing `region` integers only. **SETTLED, and it already happened once:** the original 10 even regions were re-grouped into 5 uneven ones to match a real school's lists, by editing only `region` integers as planned. Nothing in the engine, config, or tests assumes a region count or size, so this can happen again the same way.
 
 ### Decided during the build (Phases 1-3), all approved unless noted
 
 7. **Washington DC is drawn but inert.** It is on the map, because a US map without it looks wrong, but it is never a question, never tinted, and clicks pass straight through it. It is not in `states.js` and does not need to be.
-8. **Region colours:** each of the 10 regions gets its own colour rather than one shared highlight, so neighbouring picked regions never merge into one blob. The dot on each region checkbox is the map's key. All ten live as CSS variables in `style.css`.
+8. **Region colours:** each region gets its own colour rather than one shared highlight, so neighbouring picked regions never merge into one blob. The dot on each region checkbox is the map's key. `style.css` predefines 10 of these variables; only as many are used as there are regions in `data/states.js` at the time.
 9. **The "look here" ring** around the state being asked about — see the note in Section 10. Without it, small states are unreadable as a question.
 10. **Per-state hover labels stripped from the map** — they gave the answer away on mouseover. See Section 10.
 11. **Auto-advance between questions**, after a green flash lasting `feedbackSeconds`, rather than a "Next" button. Keeps a 5-question round moving without extra clicking.
