@@ -76,7 +76,7 @@ const SPELLING_DATA = {
         { word: "there",  sentence: "Your bag is over there." },
         { word: "they're", sentence: "They're going to the park." },
         { word: "to",     sentence: "We are going to the store." },
-        { word: "too",    sentence: "I want to come too." },
+        { word: "too",    sentence: "I want some candy too." },
         { word: "two",    sentence: "I have two hands." },
         { word: "knew",   sentence: "She knew the answer." },
         { word: "new",    sentence: "He has a new bike." }
