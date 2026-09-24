@@ -14,7 +14,9 @@
   It answers three questions:
     1. Does every state in data/states.js have a shape on the map?
     2. Does every shape light up, one at a time, correctly?
-    3. Does each region color the right 5 states?
+    3. Does each region color the states that are really in it - and
+       does every state belong to a real region, with no region left
+       empty?
 
   Use it again any time the map or data/states.js is edited.
 -->
@@ -104,7 +106,7 @@
 
   <!-- Question 3: does each region color the right states? -->
   <h2 style="font-size:28px;">Regions</h2>
-  <p class="lead">Click a region. Its 5 states should color in.</p>
+  <p class="lead">Click a region. Its states should color in.</p>
   <div class="region-grid" id="region-grid"></div>
 
 </main>
@@ -162,21 +164,48 @@ function runChecks() {
        + onMap.length + " on the map."
   });
 
-  // Every region has 5 states, per the spec.
+  // Every state belongs to a region that is actually declared, and no
+  // declared region is left with nothing in it.
+  //
+  // This USED to insist that every region hold exactly 5 states. That
+  // was only ever true because the shipped data happened to be built
+  // that way - ten regions, five states apiece - not because the game
+  // needs it to be. The engine reads a region's size live wherever it
+  // matters (js/games.js), so regions of 4, 11, and 12 states all work
+  // fine, and this check was the one place still insisting otherwise.
+  // It went stale the day someone reorganized the regions to match a
+  // real school's lists, and would have gone stale again the next time
+  // regardless. What is still worth checking: a state pointing at a
+  // region number nobody declared (a typo), and a region declared with
+  // nothing in it (dead weight on the tick-box screen).
   const perRegion = {};
   QUIZ_DATA.items.forEach(function (item) {
     perRegion[item.region] = (perRegion[item.region] || 0) + 1;
   });
-  const oddRegions = Object.keys(perRegion).filter(function (key) {
-    return perRegion[key] !== 5;
+
+  const declaredRegions = Object.keys(QUIZ_DATA.regions);
+  const orphanRegionKeys = Object.keys(perRegion).filter(function (key) {
+    return declaredRegions.indexOf(key) === -1;
+  });
+  const emptyRegions = declaredRegions.filter(function (key) {
+    return !perRegion[key];
   });
 
   results.push({
-    ok: oddRegions.length === 0,
-    good: "All 10 regions hold exactly 5 states.",
-    bad: "Regions without 5 states: " + oddRegions.map(function (key) {
-      return QUIZ_DATA.regions[key] + " has " + perRegion[key];
-    }).join(", ")
+    ok: orphanRegionKeys.length === 0 && emptyRegions.length === 0,
+    good: "Every state belongs to a declared region, and none of the "
+        + declaredRegions.length + " regions are empty.",
+    bad: [
+      orphanRegionKeys.length
+        ? "states point at region(s) nobody declared: "
+          + orphanRegionKeys.join(", ")
+        : null,
+      emptyRegions.length
+        ? "declared but empty: " + emptyRegions.map(function (key) {
+            return QUIZ_DATA.regions[key];
+          }).join(", ")
+        : null
+    ].filter(function (line) { return line; }).join("; ")
   });
 
   panel.innerHTML = "";

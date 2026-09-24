@@ -41,9 +41,19 @@
      "typing"    Modes 2, 3, 5, 6, 8  spell it out letter by letter
      "mapClick"  Modes 9, 10        click the state on the map
 
-   All ten modes are built. Every one of them is a line in the
-   MODE_RULES table below and nothing else - which is the whole
-   point of the table.
+   All ten modes are built. Every one of them is a line in a
+   mode table and nothing else - which is the whole point of
+   the table.
+
+   THE ENGINE NO LONGER KNOWS WHAT A STATE IS. There is more
+   than one game now, and the mode tables moved out to
+   js/games.js along with everything else that is specific to
+   a subject: where the questions come from, what tells two of
+   them apart, and the part of the screen a question appears
+   ON - the map in one game, the voice in another. This file
+   asks the GAME for all of that and never names a state, a
+   region or a map. Adding a third game should not need this
+   file opened at all.
 
    EXAM MODE (Phase 8) is a SWITCH, not an eleventh mode. It can
    be turned on for any of the ten, and while it is on this file
@@ -63,124 +73,51 @@
 const Quiz = (function () {
 
   /* ==========================================================
-     WHAT EACH MODE ASKS FOR
+     WHICH GAME IS BEING PLAYED
 
-     "asks" is which field of a state the player must produce.
-     "answerWith" is how they produce it.
-     Adding a mode later means adding a line here, not
-     rewriting the engine.
+     The mode table that used to sit here has moved to
+     js/games.js, because there is more than one game now and
+     each one has its own. Everything else about a mode works
+     exactly as it did: "asks" is still which field of an item
+     the player must produce, "answerWith" is still how they
+     produce it, and adding a mode is still adding a line to a
+     table rather than rewriting anything here.
 
-     The other switches, all optional:
-       showFirstLetter  start the word off with its first letter
-       showDashes       show a dash for every letter still to come
-       hint             offer the Hint button, which names the state
-       allCaps          every letter must be a capital (Mode 8's
-                        abbreviations - "ME", never "Me" or "me")
-       showsTargetText  the question is READ, because the map is
-                        the answer sheet and must give nothing away
+     "game" is the entry from GAMES that this round belongs to.
+     It is where the engine gets its questions, and "stage" is
+     the part of the screen the question appears ON - the map
+     in one game, the voice in another. Nothing below this line
+     knows which.
      ========================================================== */
-  const MODE_RULES = {
-    1: {
-      asks: "name",
-      answerWith: "choices",
-      prompt: "Which state is lit up?"
-    },
-    2: {
-      asks: "name",
-      answerWith: "typing",
-      showFirstLetter: true,    // the word starts with its first letter filled in
-      showDashes: true,         // and a dash for every letter still to come
-      prompt: "Spell the state that is lit up."
-    },
-    3: {
-      asks: "name",
-      answerWith: "typing",
-      showFirstLetter: false,   // no head start
-      showDashes: false,        // and no clue how long the word is
-      prompt: "Spell the state that is lit up. No hints this time!"
-    },
-
-    /* --- The capitals (Phase 7). Same three engines, pointed at the
-           "capital" field instead of "name". The map still lights the
-           state up, so the question is "which city belongs to THIS
-           shape" - and the Hint button names the shape. --- */
-    4: {
-      asks: "capital",
-      answerWith: "choices",
-      hint: true,
-      prompt: "What is the capital of the state that is lit up?"
-    },
-    5: {
-      asks: "capital",
-      answerWith: "typing",
-      showFirstLetter: true,
-      showDashes: true,
-      hint: true,
-      prompt: "Spell the capital of the state that is lit up."
-    },
-    6: {
-      asks: "capital",
-      answerWith: "typing",
-      showFirstLetter: false,
-      showDashes: false,
-      hint: true,
-      prompt: "Spell the capital. No letters to help you this time!"
-    },
-
-    /* --- The two-letter codes (Phase 7). Mode 8 is the one place in
-           the game where EVERY letter has to be a capital. --- */
-    7: {
-      asks: "abbr",
-      answerWith: "choices",
-      prompt: "Which 2 letters stand for the state that is lit up?"
-    },
-    8: {
-      asks: "abbr",
-      answerWith: "typing",
-      showFirstLetter: false,
-      showDashes: false,
-      allCaps: true,
-      hint: true,
-      prompt: "Type the 2 letters for the state that is lit up."
-    },
-
-    9: {
-      asks: "name",
-      answerWith: "mapClick",
-      // The map is the ANSWER SHEET in this mode, so it must not light
-      // anything up. The question is read instead, in big letters.
-      showsTargetText: true,
-      prompt: "Find this state on the map."
-    },
-
-    // Mode 10 is Mode 9 with one word changed. The thing READ OUT is
-    // the capital; the thing CLICKED is still a state, and the click is
-    // still judged on the state's abbr - so none of the code below
-    // needed to learn anything new.
-    10: {
-      asks: "capital",
-      answerWith: "mapClick",
-      showsTargetText: true,
-      prompt: "Which state has this capital city? Find it on the map."
-    }
-  };
+  let game = null;
+  let stage = null;
 
   // Shown when a letter is right but typed in lowercase where a
-  // capital belongs. Wording comes straight from the spec.
+  // capital belongs. The US game's wording comes straight from the
+  // spec; the spelling game needed its own, because "states or cities"
+  // means nothing when the word is "Monday".
   const CAPITAL_TOOLTIP =
     "Remember to capitalize the first letter of states or cities.";
+
+  const WORD_CAPITAL_TOOLTIP =
+    "This word starts with a CAPITAL letter. Hold Shift to make one.";
 
   // Mode 8 only. An abbreviation is capitals the whole way through, so
   // the "first letter of the word" wording above would be misleading.
   const ALLCAPS_TOOLTIP =
     "The 2 letters are BOTH capitals. It is ME, not Me or me.";
 
+  function capitalTooltip() {
+    if (state.rules.allCaps) return ALLCAPS_TOOLTIP;
+    return game.usesMap ? CAPITAL_TOOLTIP : WORD_CAPITAL_TOOLTIP;
+  }
+
   // Everything about the round in progress lives here.
   let state = {
-    modeId: null,      // which of the 10 modes is being played
-    rules: null,       // that mode's line from MODE_RULES above
-    regions: [],       // which region numbers the player picked
-    queue: [],         // states still to be asked
+    modeId: null,      // which mode of this game is being played
+    rules: null,       // that mode's line from the game's rules table
+    regions: [],       // which groups the player picked (regions, or lists)
+    queue: [],         // questions still to be asked
     current: null,     // the state being asked right now
     attempts: 0,       // picks used on the current question (0, 1 or 2)
     isRevisit: false,  // is this the question's second and last appearance?
@@ -254,6 +191,23 @@ const Quiz = (function () {
     return document.getElementById(id);
   }
 
+  // One question's unique id. The US game uses the 2-letter state code
+  // for this and the spelling game uses the word itself; the engine only
+  // ever needs "the thing that tells two questions apart".
+  function keyOf(item) {
+    return game.itemKey(item);
+  }
+
+  // Ask the question again, without it costing anything. On the map
+  // there is nothing to repeat - the state never stopped being lit -
+  // but a spoken word has to be said again, and hearing it a second
+  // time is the QUESTION being repeated, not help with the answer.
+  // So this is free, unlimited, and never touches the score.
+  function repeatQuestion() {
+    if (!state.current || !stage) return;
+    stage.repeat(state.current, state.rules);
+  }
+
   /* ==========================================================
      STARTING A ROUND
      ========================================================== */
@@ -267,22 +221,26 @@ const Quiz = (function () {
 
     const exam = !!(options && options.exam);
 
-    const rules = MODE_RULES[modeId];
+    // Which game this round belongs to. Defaults to the US game so
+    // that an old call with three arguments still works.
+    game = (options && options.game) || GAMES.states;
+    stage = game.stage;
+
+    const rules = game.rules[modeId];
     if (!rules) {
-      console.error("[quiz] mode " + modeId + " is not built yet.");
+      console.error("[quiz] mode " + modeId + " is not built in "
+        + game.id + ".");
       return null;
     }
 
-    // Every state in the picked regions, in random order.
-    const states = QUIZ_DATA.items.filter(function (item) {
-      return regions.indexOf(item.region) !== -1;
-    });
+    // Every question in the picked groups, in random order.
+    const items = game.getItems(regions);
 
     state = {
       modeId: modeId,
       rules: rules,
       regions: regions.slice(),
-      queue: shuffle(states),
+      queue: shuffle(items),
       current: null,
       attempts: 0,
       isRevisit: false,
@@ -290,7 +248,7 @@ const Quiz = (function () {
       points: 0,
       resolvedCount: 0,
       questionNumber: 0,
-      totalCount: states.length,
+      totalCount: items.length,
       firstTryCount: 0,
       usedHint: false,
       answers: [],
@@ -319,11 +277,13 @@ const Quiz = (function () {
 
     // Every round starts with the map not listening and the zoom panel
     // away. The click modes switch both on; the others leave them off.
-    USMap.setClickable(false);
-    USMap.hideZoom();
+    // (Both are no-ops in a game with no map.)
+    stage.setClickable(false);
+    stage.hideZoom();
 
     if (CONFIG.debug) {
       console.log("[quiz] round started:", {
+        game: game.id,
         mode: modeId,
         asking_for: rules.asks,
         regions: regions,
@@ -363,12 +323,12 @@ const Quiz = (function () {
     // Has this one already been round the block once? If so, this is
     // its last appearance and it is only worth half.
     state.isRevisit =
-      state.comeBack.indexOf(state.current.abbr) !== -1;
+      state.comeBack.indexOf(keyOf(state.current)) !== -1;
 
     // Every spelling that counts as right. Nearly always just one,
     // but "Saint Paul" / "St. Paul" is why this is a list.
     const answer = state.current[state.rules.asks];
-    state.answers = [answer].concat(state.current.capitalAlternates || []);
+    state.answers = [answer].concat(game.alternates(state.current));
     state.typed = "";
     state.pendingWrong = "";
     state.backspacesLeft = CONFIG.backspacesPerQuestion;
@@ -381,18 +341,20 @@ const Quiz = (function () {
     clearFeedback();
     hideTooltip();
 
-    // Light up the state being asked about - EXCEPT in the click modes,
-    // where lighting it up would be handing over the answer. There the
-    // map stays blank and the question is read instead.
+    // Ask the question, however this game asks one: the US game lights
+    // the state up, the spelling game reads the word out loud. EXCEPT in
+    // the click modes, where lighting the state up would be handing over
+    // the answer - there the map stays blank and the question is written
+    // in big letters instead.
     if (isMapClick()) {
-      USMap.clearAll();
+      stage.clearAll();
     } else {
-      USMap.highlight(state.current.abbr);
+      stage.present(state.current, state.rules);
     }
 
     if (CONFIG.debug) {
       el("quiz-debug-answer").textContent =
-        "Debug - the answer is: " + answer + " (" + state.current.abbr + ")";
+        "Debug - the answer is: " + answer + " (" + keyOf(state.current) + ")";
     }
 
     if (state.isRevisit) {
@@ -406,6 +368,17 @@ const Quiz = (function () {
     const clicking = isMapClick();
 
     el("quiz-choices").hidden = typing || clicking;
+    el("quiz-listen").hidden = !game.stage.speaks;
+    el("quiz-map-row").hidden = !game.usesMap;
+
+    // A computer with no voice only gives itself away a moment AFTER
+    // being asked to speak, so this asks to be told rather than
+    // checking now and believing the answer. The word is never shown
+    // instead - that would quietly turn a spelling test into a copying
+    // exercise.
+    if (game.stage.speaks) {
+      el("quiz-no-voice").hidden = Speech.isAvailable();
+    }
     el("quiz-typing").hidden = !typing || state.exam;
     el("quiz-exam-typing").hidden = !typing || !state.exam;
     el("quiz-exam-actions").hidden = !state.exam;
@@ -483,16 +456,17 @@ const Quiz = (function () {
       });
     }
 
-    const sameRegion = QUIZ_DATA.items.filter(function (item) {
-      return item.region === state.current.region;
-    });
-    const inPlay = QUIZ_DATA.items.filter(function (item) {
-      return state.regions.indexOf(item.region) !== -1;
-    });
+    const everything = game.getAllItems();
+    const currentGroup = game.itemGroup(state.current);
 
-    // Best first, then widen out. The last pool (every state in the
+    const sameRegion = everything.filter(function (item) {
+      return game.itemGroup(item) === currentGroup;
+    });
+    const inPlay = game.getItems(state.regions);
+
+    // Best first, then widen out. The last pool (every question in the
     // game) only matters if the data is ever trimmed very small.
-    const pools = [sameRegion, inPlay, QUIZ_DATA.items];
+    const pools = [sameRegion, inPlay, everything];
     const picked = [];
 
     for (let i = 0; i < pools.length && picked.length < 3; i++) {
@@ -529,11 +503,11 @@ const Quiz = (function () {
 
     // The bigger view of the crowded north-east. Shown before clicking
     // is switched on, so that it goes live along with the big map.
-    USMap.showZoom(el("quiz-zoom"));
+    stage.showZoom(el("quiz-zoom"));
 
     // Now the map will listen. It is switched off again the moment
     // the round ends, so it never answers questions on other screens.
-    USMap.setClickable(true, judgeMapClick);
+    stage.setClickable(true, judgeMapClick);
   }
 
   function judgeMapClick(abbr) {
@@ -547,26 +521,26 @@ const Quiz = (function () {
 
     state.attempts++;
 
-    if (abbr === state.current.abbr) {
+    if (abbr === keyOf(state.current)) {
       awardMapClick();
     } else if (state.attempts === 1) {
       state.wrongClicks.push(abbr);
-      USMap.setLook(abbr, "is-wrong");
+      stage.markWrong(abbr);
       Sound.play("wrong");
       say("Not that one. Try again!");
       logMath(0);
     } else {
       state.wrongClicks.push(abbr);
-      USMap.setLook(abbr, "is-wrong");
+      stage.markWrong(abbr);
       revealAndRetire();
     }
   }
 
   // Right state clicked. Same scoring as every other mode.
   function awardMapClick() {
-    USMap.setClickable(false);
-    USMap.setLook(state.current.abbr, "is-correct");
-    USMap.showRing(state.current.abbr);
+    stage.setClickable(false);
+    stage.markCorrect(keyOf(state.current));
+    stage.showRing(keyOf(state.current));
     Sound.play("correct");
 
     const gained = awardPoints();
@@ -651,11 +625,24 @@ const Quiz = (function () {
   }
 
   // Does the letter at this position HAVE to be a capital?
-  // Two rules: Mode 8's abbreviations are capitals all through, and
-  // everywhere else it is the first letter of each word. Either way,
-  // only where the answer really does have a capital sitting there.
+  //
+  // Three rules now. First: capitals are only ever required where the
+  // answer really does have one sitting there - which is also how the
+  // spelling lists say which words need a capital. Type "Monday" into
+  // the list and the capital is required; type "because" and it never
+  // is. There is nothing else to fill in.
+  //
+  // Second: a word list can switch capitals off entirely, with the
+  // "Capital letters must match" tick box in the word list editor.
+  // Then "monday" is accepted, and the screen quietly fills in the
+  // capital M so the right spelling is still what she ends up looking
+  // at.
+  //
+  // Third: Mode 8's abbreviations are capitals all the way through,
+  // and everywhere else it is the first letter of each word.
   function mustBeCapital(candidates, position, wanted) {
     if (wanted === wanted.toLowerCase()) return false;
+    if (game.capsOptional && game.capsOptional(state.current)) return false;
     if (state.rules.allCaps) return true;
     return candidates.some(function (candidate) {
       return isWordStart(candidate, position);
@@ -754,7 +741,7 @@ const Quiz = (function () {
       // instead of just buzzing at him.
       if (mustBeCapital(candidates, position, sameLetter[0])) {
         rejectLetter(letter);
-        showTooltip(state.rules.allCaps ? ALLCAPS_TOOLTIP : CAPITAL_TOOLTIP);
+        showTooltip(capitalTooltip());
         return;
       }
 
@@ -871,7 +858,7 @@ const Quiz = (function () {
 
   // The word is spelled. Score it the same way a right pick is scored.
   function solveTyped() {
-    USMap.setLook(state.current.abbr, "is-correct");
+    stage.markCorrect(keyOf(state.current));
     Sound.play("correct");
     el("quiz-skip").hidden = true;
     hideTooltip();
@@ -896,7 +883,7 @@ const Quiz = (function () {
       return;
     }
 
-    state.comeBack.push(state.current.abbr);
+    state.comeBack.push(keyOf(state.current));
     state.queue.push(state.current);
 
     say("No problem - this one comes back later.");
@@ -943,8 +930,8 @@ const Quiz = (function () {
     if (isMapClick()) {
       // Same as practice: the map cannot show the question, so it is read.
       el("quiz-target").textContent = state.current[state.rules.asks];
-      USMap.showZoom(el("quiz-zoom"));
-      USMap.setClickable(true, chooseState);
+      stage.showZoom(el("quiz-zoom"));
+      stage.setClickable(true, chooseState);
       return;
     }
 
@@ -972,8 +959,8 @@ const Quiz = (function () {
   function chooseState(abbr) {
     if (!state.current || !state.exam) return;
 
-    USMap.clearAll();
-    USMap.setLook(abbr, "is-chosen");
+    stage.clearAll();
+    stage.markChosen(abbr);
 
     state.chosen = abbr;
     setSubmitEnabled(true);
@@ -993,16 +980,9 @@ const Quiz = (function () {
     }
     if (isMapClick()) {
       // He clicked a shape; the answer he gave is that state's name.
-      return state.chosen ? stateName(state.chosen) : "";
+      return state.chosen ? game.labelFor(state.chosen) : "";
     }
     return state.chosen || "";
-  }
-
-  function stateName(abbr) {
-    const found = QUIZ_DATA.items.filter(function (item) {
-      return item.abbr === abbr;
-    });
-    return found.length ? found[0].name : abbr;
   }
 
   // Submit. Marks it in silence, writes it down, and moves straight on -
@@ -1039,20 +1019,31 @@ const Quiz = (function () {
     if (!skipped) {
       if (isMapClick()) {
         // Judged on the state code, exactly as a practice click is.
-        right = (state.chosen === state.current.abbr);
+        right = (state.chosen === keyOf(state.current));
       } else if (state.rules.answerWith === "typing") {
         // Every accepted spelling, capitals and all. Practice REFUSES a
         // lowercase first letter outright, so an exam holding the same
         // line is the same standard, not a harsher one.
         right = state.answers.indexOf(given) !== -1;
 
-        // Right letters, wrong capitals. Still wrong - but the review
-        // screen says which kind of wrong, so it is a lesson and not a
-        // mystery.
+        // Same letters, different capitals. On a word list with
+        // capitals switched off, practice would have ACCEPTED this, so
+        // an exam has to accept it too - the two must never mark the
+        // same answer differently.
+        const sameLetters = state.answers.some(function (candidate) {
+          return candidate.toLowerCase() === given.toLowerCase();
+        });
+
+        if (!right && sameLetters
+            && game.capsOptional && game.capsOptional(state.current)) {
+          right = true;
+        }
+
+        // Right letters, wrong capitals, where capitals DO matter.
+        // Still wrong - but the review screen says which kind of wrong,
+        // so it is a lesson and not a mystery.
         if (!right) {
-          capitalOnly = state.answers.some(function (candidate) {
-            return candidate.toLowerCase() === given.toLowerCase();
-          });
+          capitalOnly = sameLetters;
         }
       } else {
         right = (given === state.current[state.rules.asks]);
@@ -1065,8 +1056,8 @@ const Quiz = (function () {
     }
 
     state.record.push({
-      abbr: state.current.abbr,
-      region: state.current.region,
+      key: keyOf(state.current),
+      group: game.itemGroup(state.current),
       question: examQuestion(),
       correct: examCorrect(),
       given: skipped ? "" : given,
@@ -1079,20 +1070,16 @@ const Quiz = (function () {
     logMath(right ? CONFIG.basePoints : 0);
   }
 
-  // The question as it appeared on screen. Modes 1-8 lit a state up, so
-  // that state IS the question; Mode 9 read out a name and Mode 10 a city.
+  // The question as it appeared on screen, and what a right answer looks
+  // like. Both depend on the subject rather than the engine - Modes 1-8
+  // lit a state up, Mode 9 read out a name, Mode 10 a city, and the
+  // spelling game spoke a word - so each game says it for itself.
   function examQuestion() {
-    return isMapClick()
-      ? state.current[state.rules.asks]
-      : state.current.name;
+    return game.examQuestionLabel(state.current, state.rules);
   }
 
-  // What a right answer looks like. In the clicking modes the thing to
-  // find is a STATE - even in Mode 10, where the question was a city.
   function examCorrect() {
-    return isMapClick()
-      ? state.current.name
-      : state.current[state.rules.asks];
+    return game.examCorrectLabel(state.current, state.rules);
   }
 
   function setSubmitEnabled(on) {
@@ -1176,12 +1163,26 @@ const Quiz = (function () {
     state.usedHint = true;
     hideHintButton();
 
-    const name = el("quiz-hint-name");
-    name.textContent = "This state is " + state.current.name + ".";
-    name.hidden = false;
+    if (state.rules.hintStyle === "nextLetter") {
+      // The spelling game. There is no map to name, so the help is one
+      // letter of the word - put in through the SAME door a typed letter
+      // goes through, so a hint that lands on the last letter finishes
+      // the word properly instead of leaving it a letter short.
+      const wanted = targetAnswer().charAt(state.typed.length);
+      if (wanted) {
+        state.pendingWrong = "";     // a hint also clears a stuck mistake
+        acceptLetter(wanted);
+      }
+    } else {
+      // The US game: the four modes that light a state up and then ask
+      // for something that is NOT its name. The hint says which state.
+      const name = el("quiz-hint-name");
+      name.textContent = game.hintText(state.current, state.rules);
+      name.hidden = false;
+    }
 
     if (CONFIG.debug) {
-      console.log("[quiz] hint used on " + state.current.abbr
+      console.log("[quiz] hint used on " + keyOf(state.current)
         + " - this question is now worth "
         + Math.max(0, CONFIG.basePoints - CONFIG.penaltyPoints));
     }
@@ -1230,15 +1231,12 @@ const Quiz = (function () {
     return "Right on the second try. +" + gained + " points";
   }
 
-  // The answer, said out loud. In the click modes the thing to find is
-  // a STATE - even in Mode 10, where the question was a city - so the
-  // state is the thing named, and the city is tied back to it.
+  // The answer, spelled out after a miss. Which words to use is a
+  // question about the subject, not about the engine, so the game says
+  // it: in Mode 10 the thing to find is a STATE even though the question
+  // was a city, and the two have to be tied back together.
   function answerText() {
-    if (isMapClick() && state.rules.asks !== "name") {
-      return state.current.name + ", where "
-        + state.current[state.rules.asks] + " is the capital";
-    }
-    return state.current[state.rules.asks];
+    return game.answerText(state.current, state.rules);
   }
 
   // Add up the points for a solved question. Shared by every mode:
@@ -1274,7 +1272,7 @@ const Quiz = (function () {
   // Right answer in a multiple-choice mode.
   function award(button) {
     button.classList.add("is-correct");
-    USMap.setLook(state.current.abbr, "is-correct");
+    stage.markCorrect(keyOf(state.current));
     Sound.play("correct");
     lockChoices();
 
@@ -1319,14 +1317,14 @@ const Quiz = (function () {
   // and never ask this one again. Used by both kinds of mode.
   function revealAndRetire() {
     Sound.play("wrong");
-    USMap.setLook(state.current.abbr, "is-correct");
+    stage.markCorrect(keyOf(state.current));
 
     // In the click modes the map was blank, so the green shape is the
     // only thing pointing at the answer. Ring it, or the eye has to
     // hunt for it. Clicking is switched off while it is being shown.
     if (isMapClick()) {
-      USMap.setClickable(false);
-      USMap.showRing(state.current.abbr);
+      stage.setClickable(false);
+      stage.showRing(keyOf(state.current));
     }
 
     say("The answer is " + answerText() + ".");
@@ -1423,7 +1421,7 @@ const Quiz = (function () {
   function logMath(gained) {
     if (!CONFIG.debug) return;
     console.log("[quiz] Q" + state.questionNumber + "/" + state.totalCount
-      + " " + state.current.abbr
+      + " " + keyOf(state.current)
       + (state.isRevisit ? " | REVISIT" : " | first look")
       + " | attempt " + state.attempts
       + " | earned " + gained
@@ -1437,16 +1435,17 @@ const Quiz = (function () {
   function finishRound() {
     cancelTimers();
 
-    // Clicking goes off FIRST. There is only one map and it gets moved
-    // to other screens; a listener left on would answer questions
-    // nobody is asking.
-    USMap.setClickable(false);
-    USMap.hideZoom();
-    USMap.clearAll();
+    // Hand the stage back. For the map that means switching clicking off
+    // FIRST - there is only one map and it gets moved to other screens,
+    // so a listener left on would answer questions nobody is asking. For
+    // the spelling game it means stopping the voice mid-word.
+    stage.teardown();
 
     el("quiz-choices").innerHTML = "";
     el("quiz-letters").innerHTML = "";
     el("quiz-skip").hidden = true;
+    el("quiz-listen").hidden = true;
+    el("quiz-map-row").hidden = false;
     el("quiz-typing").hidden = true;
     el("quiz-target").hidden = true;
     el("quiz-helpers").hidden = true;
@@ -1470,6 +1469,7 @@ const Quiz = (function () {
 
     if (CONFIG.debug) {
       console.log("[quiz] round finished:", {
+        game: game.id,
         points: state.points,
         firstTry: state.firstTryCount + " of " + state.totalCount,
         exam: state.exam
@@ -1566,6 +1566,16 @@ const Quiz = (function () {
       return;
     }
 
+    // Enter says the word again, in the spelling game. It can be
+    // spared: every PRINTABLE key is taken by the spelling itself, and
+    // Enter does nothing at all in a practice round. (In an exam it
+    // already means Submit, so there the button is the only way.)
+    if (event.key === "Enter") {
+      event.preventDefault();
+      repeatQuestion();
+      return;
+    }
+
     // One printable character: a letter, or the space between words.
     if (event.key.length === 1) {
       event.preventDefault();
@@ -1578,6 +1588,22 @@ const Quiz = (function () {
     .addEventListener("click", skipQuestion);
   document.getElementById("quiz-hint")
     .addEventListener("click", useHint);
+  document.getElementById("quiz-say-again")
+    .addEventListener("click", function () {
+      // Hand the keyboard back to the spelling. Left focused, this
+      // button would answer Enter itself as well as through the key
+      // handler, and say the word twice over.
+      this.blur();
+      repeatQuestion();
+    });
+
+  // If it turns out this computer cannot speak, say so on the quiz
+  // screen the moment we find out - which may be mid-question, after
+  // the screen has already been drawn. Written to cope with being told
+  // either way round, because a voice can also turn up late.
+  Speech.whenChanged(function () {
+    document.getElementById("quiz-no-voice").hidden = Speech.isAvailable();
+  });
 
   // --- Exam Mode wiring ---
   document.getElementById("exam-submit")
@@ -1595,6 +1621,7 @@ const Quiz = (function () {
   return {
     start: start,
     getState: getState,
+    repeatQuestion: repeatQuestion,
     endRoundNow: endRoundNow,
     cancelTimers: cancelTimers
   };

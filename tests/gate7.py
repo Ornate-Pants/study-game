@@ -10,6 +10,7 @@ really for, in the spec's words:
 """
 import sys
 from playwright.sync_api import sync_playwright
+from browser import launch_args, is_noise, region_question_count
 from pathlib import Path
 
 # Where the game is, worked out from where THIS file is, so the
@@ -23,9 +24,15 @@ SHOTS.mkdir(exist_ok=True)
 URL = GAME.joinpath("index.html").as_uri()
 
 # Region checkboxes are in the order they appear in data/states.js, so
-# these are the 0-based positions of the ones this gate needs.
+# these are the 0-based positions of the ones this gate needs. The
+# regions were regrouped to match a real school's lists (5 uneven
+# regions, not 10 uniform ones) - NEW_ENGLAND now really means
+# "Northeast" (11 states) and GREAT_LAKES really means "Midwest"
+# (12 states), but the names are kept so the rest of this file, which
+# reads "New England" and "Great Lakes" throughout, doesn't need a
+# rename just because the data moved on.
 NEW_ENGLAND = 0
-GREAT_LAKES = 5      # holds Minnesota, the only state with an alternate
+GREAT_LAKES = 2       # holds Minnesota, the only state with an alternate
 
 problems = []
 console = []
@@ -53,7 +60,7 @@ def start(page, mode, regions=(NEW_ENGLAND,), debug=True, quick=True):
         # round is under way, and "it is not there yet" can never be true.
         page.evaluate("() => { CONFIG.hintDelaySeconds = 1.0;"
                       " CONFIG.skipDelaySeconds = 0.3; }")
-    page.click("#start-button")
+    page.click('.game-button[data-game="states"]')
     page.locator("#mode-list button").nth(mode - 1).click()
     page.wait_for_timeout(200)
     for i in regions:
@@ -129,8 +136,18 @@ def solve_choice(page):
     page.wait_for_timeout(1250)
 
 
-def drive_to(page, wanted_abbr, solve, tries=6):
-    """Play questions until `wanted_abbr` is the one being asked."""
+def drive_to(page, wanted_abbr, solve, tries=None):
+    """Play questions until `wanted_abbr` is the one being asked.
+
+    `tries` has no fixed default any more. A search that has to reach
+    the LAST question of a round needs a budget the size of the round
+    itself, and a flat "6" only ever worked because every region used
+    to hold exactly 5 states. Left unset, it reads the CURRENT round's
+    own size (state.totalCount) live, so it is always exactly enough -
+    whichever region is actually in play - rather than a guess.
+    """
+    if tries is None:
+        tries = page.evaluate("() => Quiz.getState().totalCount") + 1
     for _ in range(tries):
         if page.locator("#screen-quiz.is-active").count() == 0:
             return False
@@ -214,7 +231,7 @@ def solve_click(page):
 
 
 with sync_playwright() as p:
-    browser = p.chromium.launch(channel="chrome")
+    browser = p.chromium.launch(**launch_args())
     page = browser.new_page(viewport={"width": 1280, "height": 1100})
     page.on("console", lambda m: console.append(m.type + ": " + m.text))
     page.on("pageerror", lambda e: problems.append("pageerror: " + str(e)))
@@ -230,6 +247,13 @@ with sync_playwright() as p:
     FULL = cfg["basePoints"]                            # 5
     HALF = max(0, cfg["basePoints"] - cfg["penaltyPoints"])   # 3
 
+    # How many questions a round over NEW_ENGLAND / GREAT_LAKES really
+    # has, read live rather than assumed - see browser.py's own note on
+    # why "just write 5" stopped being safe once the regions were
+    # regrouped to match a real school's uneven lists.
+    n1 = region_question_count(page, [NEW_ENGLAND + 1])   # Northeast, 11
+    n3 = region_question_count(page, [GREAT_LAKES + 1])   # Midwest, 12
+
     check("the title screen shows the version",
           page.locator("#version-tag").inner_text() == "v" + cfg["APP_VERSION"],
           page.locator("#version-tag").inner_text())
@@ -241,7 +265,7 @@ with sync_playwright() as p:
     check("the hint still costs exactly one penaltyPoints",
           cfg["penaltyPoints"] == 2, str(cfg["penaltyPoints"]))
 
-    page.click("#start-button")
+    page.click('.game-button[data-game="states"]')
     page.wait_for_timeout(250)
     labels = page.locator("#mode-list button")
     check("all ten modes are on the menu", labels.count() == 10,
@@ -258,7 +282,7 @@ with sync_playwright() as p:
     start(page, 4)
     abbr, name = here(page)
 
-    check("Mode 4 asks 5 questions with 1 region", hud(page)[1] == "1 of 5",
+    check(f"Mode 4 asks {n1} questions with 1 region", hud(page)[1] == f"1 of {n1}",
           hud(page)[1])
     check("Mode 4 LIGHTS UP the state - it is the question, not the answer",
           page.locator(".us-map-state.is-highlight").count() == 1)
@@ -343,14 +367,16 @@ with sync_playwright() as p:
           + " (not 1 - the penalties must not stack)")
 
     # ---- and neither hinted question counts as a first-try answer ----
-    # Two of the five took help, so three are left. 3 + 3 + 5 + 5 + 5.
+    # Two of the n1 took help, so the rest are left to finish plainly.
     while page.locator("#screen-quiz.is-active").count() == 1:
         solve_choice(page)
+    first_try_left = n1 - 2
+    expected_round_points = 2 * HALF + first_try_left * FULL
     check("hinted questions do not count as first-try",
-          page.locator("#summary-firsttry").inner_text() == "3 of 5",
+          page.locator("#summary-firsttry").inner_text() == f"{first_try_left} of {n1}",
           page.locator("#summary-firsttry").inner_text())
-    check("3 + 3 + 5 + 5 + 5 = 21 for that round",
-          page.locator("#summary-points").inner_text() == "21",
+    check(f"2 x {HALF} + {first_try_left} x {FULL} = {expected_round_points} for that round",
+          page.locator("#summary-points").inner_text() == str(expected_round_points),
           page.locator("#summary-points").inner_text())
 
     # ---- the real 8-second delay, once, un-shortened ----
@@ -372,7 +398,7 @@ with sync_playwright() as p:
     page.wait_for_timeout(1300)
 
     check("a skipped question does not count as finished",
-          hud(page)[1] == "1 of 5", hud(page)[1])
+          hud(page)[1] == f"1 of {n1}", hud(page)[1])
     if drive_to(page, skipped, solve_typed):
         before = points(page)
         solve_typed(page)
@@ -428,7 +454,7 @@ with sync_playwright() as p:
         page.wait_for_timeout(1300)
         check("St. Paul is accepted as fully correct",
               points(page) >= FULL, str(points(page)))
-        check("...and it moved on", hud(page)[1] != "1 of 5", hud(page)[1])
+        check("...and it moved on", hud(page)[1] != f"1 of {n3}", hud(page)[1])
 
     # the long spelling has to work just as well
     start(page, 5, regions=(GREAT_LAKES,))
@@ -466,10 +492,10 @@ with sync_playwright() as p:
           page.locator(".us-map-state.is-highlight").count() == 1)
     check("Mode 7 offers no hint - the state is right there to look at",
           page.locator("#quiz-helpers").is_hidden())
-    for _ in range(5):
+    for _ in range(n1):
         solve_choice(page)
-    check("a perfect Mode 7 round scores 25",
-          page.locator("#summary-points").inner_text() == "25",
+    check(f"a perfect Mode 7 round scores {n1 * FULL}",
+          page.locator("#summary-points").inner_text() == str(n1 * FULL),
           page.locator("#summary-points").inner_text())
 
     # ============ 8. Mode 8: BOTH letters must be capitals ============
@@ -588,15 +614,17 @@ with sync_playwright() as p:
     for mode, solve in [(4, solve_choice), (5, solve_typed), (6, solve_typed),
                         (7, solve_choice), (8, solve_typed)]:
         start(page, mode)
-        for _ in range(5):
+        for _ in range(n1):
             if page.locator("#screen-quiz.is-active").count() == 0:
                 break
             solve(page)
-        check(f"a perfect Mode {mode} round scores exactly 25",
-              page.locator("#summary-points").inner_text() == "25",
+        expected_mode_score = n1 * FULL
+        check(f"a perfect Mode {mode} round scores exactly {expected_mode_score}",
+              page.locator("#summary-points").inner_text() == str(expected_mode_score),
               page.locator("#summary-points").inner_text())
-        check(f"Mode {mode}: 25 points becomes 25 seconds of running",
-              page.locator("#summary-seconds").inner_text() == "25")
+        check(f"Mode {mode}: {expected_mode_score} points becomes "
+              f"{expected_mode_score} seconds of running",
+              page.locator("#summary-seconds").inner_text() == str(expected_mode_score))
 
     # ============ 11. The older modes are untouched ============
     page2 = browser.new_page(viewport={"width": 1280, "height": 1100})
@@ -611,10 +639,10 @@ with sync_playwright() as p:
           answer(page2) == page2.evaluate("() => Quiz.getState().current.name"))
     check("Gate 2: Mode 1 offers no hint",
           page2.locator("#quiz-helpers").is_hidden())
-    for _ in range(5):
+    for _ in range(n1):
         solve_choice(page2)
-    check("Gate 2: a perfect Mode 1 round still scores 25",
-          page2.locator("#summary-points").inner_text() == "25",
+    check(f"Gate 2: a perfect Mode 1 round still scores {n1 * FULL}",
+          page2.locator("#summary-points").inner_text() == str(n1 * FULL),
           page2.locator("#summary-points").inner_text())
 
     start(page2, 2)
@@ -633,7 +661,8 @@ with sync_playwright() as p:
 
     browser.close()
 
-bad = [c for c in console if c.startswith(("error", "warning"))]
+bad = [c for c in console
+       if c.startswith(("error", "warning")) and not is_noise(c)]
 check("console is clean (no errors or warnings)", not bad, str(bad[:3]))
 
 print("\n=== " + ("GATE 7: ALL CHECKS PASSED" if not problems

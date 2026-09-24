@@ -1,6 +1,8 @@
 """Drive Mode 9 (click the state on the map) in Chrome and check Gate 6."""
 import sys
 from playwright.sync_api import sync_playwright
+from browser import (launch_args, is_noise, check_regions,
+                      region_question_count, safe_drive_to_tries)
 from pathlib import Path
 
 # Where the game is, worked out from where THIS file is, so the
@@ -26,15 +28,19 @@ def check(label, ok, detail=""):
         problems.append(label + " " + detail)
 
 
-def start(page, mode, regions=(0,), debug=True):
-    """Open the game and get a round of `mode` under way. mode is 1-based."""
+def start(page, mode, regions=(1,), debug=True):
+    """Open the game and get a round of `mode` under way. mode is 1-based.
+
+    `regions` holds real region ids (see browser.py's region_checkbox), not
+    on-screen positions - the region layout is no longer 10 uniform blocks,
+    so "the first checkbox" no longer means anything stable.
+    """
     page.goto(URL + ("?debug=1" if debug else ""))
     page.wait_for_timeout(300)
-    page.click("#start-button")
+    page.click('.game-button[data-game="states"]')
     page.locator("#mode-list button").nth(mode - 1).click()
     page.wait_for_timeout(200)
-    for i in regions:
-        page.locator("#region-list input").nth(i).check()
+    check_regions(page, regions)
     page.wait_for_timeout(250)
     page.click("#start-quiz-button")
     page.wait_for_timeout(400)
@@ -187,7 +193,7 @@ def some_other_state(page, abbr, avoid=()):
 
 
 with sync_playwright() as p:
-    browser = p.chromium.launch(channel="chrome")
+    browser = p.chromium.launch(**launch_args())
     page = browser.new_page(viewport={"width": 1280, "height": 1100})
     page.on("console", lambda m: console.append(m.type + ": " + m.text))
     page.on("pageerror", lambda e: problems.append("pageerror: " + str(e)))
@@ -204,7 +210,7 @@ with sync_playwright() as p:
     # The version LITERAL belongs to gate7 now, which is the gate for the
     # build that carries it. Here it only has to be consistent with itself.
 
-    page.click("#start-button")
+    page.click('.game-button[data-game="states"]')
     page.wait_for_timeout(200)
     mode9 = page.locator("#mode-list button").nth(MODE_9 - 1)
     check("Mode 9 is on the menu", "Find the State" in mode9.inner_text(),
@@ -223,8 +229,10 @@ with sync_playwright() as p:
     # ============ 2. The map must NOT give the answer away ============
     start(page, MODE_9)
     abbr, name = target(page)
+    n = region_question_count(page, [1])
+    cfg = page.evaluate("() => CONFIG")
 
-    check("Mode 9 asks 5 questions with 1 region", hud(page)[1] == "1 of 5",
+    check(f"Mode 9 asks {n} questions with 1 region", hud(page)[1] == f"1 of {n}",
           hud(page)[1])
     check("NOTHING on the map is lit up - that would BE the answer",
           page.locator(".us-map-state.is-highlight").count() == 0,
@@ -266,7 +274,7 @@ with sync_playwright() as p:
     check("a right first click is worth the full 5", hud(page)[0] == 5,
           str(hud(page)))
     abbr2 = next_question(page, abbr)
-    check("it moves on by itself", hud(page)[1] == "2 of 5", hud(page)[1])
+    check("it moves on by itself", hud(page)[1] == f"2 of {n}", hud(page)[1])
     check("and the green is cleared off for the next question",
           page.locator(".us-map-state.is-correct").count() == 0)
 
@@ -278,7 +286,7 @@ with sync_playwright() as p:
     check("a wrong click turns THAT state red", "is-wrong" in looks(page, wrong),
           looks(page, wrong))
     check("a wrong click costs nothing", hud(page)[0] == 5, str(hud(page)))
-    check("the question does not move on", hud(page)[1] == "2 of 5", hud(page)[1])
+    check("the question does not move on", hud(page)[1] == f"2 of {n}", hud(page)[1])
     check("the answer is still not shown",
           page.locator(".us-map-state.is-correct").count() == 0)
     check("the screen says to try again",
@@ -331,22 +339,31 @@ with sync_playwright() as p:
     page.screenshot(path=str(SHOTS / "g6-reveal.png"), full_page=True)
 
     next_question(page, abbr3)
-    check("it moves on after the reveal", hud(page)[1] == "4 of 5", hud(page)[1])
+    check("it moves on after the reveal", hud(page)[1] == f"4 of {n}", hud(page)[1])
 
-    # play out the rest; the blown question must never come back
+    # play out the rest; the blown question must never come back.
+    # Three questions are already spent (first-try, second-chance, blown),
+    # so whatever is left of the round is n - 3 more questions, not a
+    # fixed 2 - that was only ever true when every region held 5 states.
     rest = []
-    for _ in range(2):
+    for _ in range(n - 3):
         a, _n = target(page)
         rest.append(a)
         answer_question(page)
 
     check("a missed question is not asked again", abbr3 not in rest,
           abbr3 + " in " + str(rest))
-    check("5 questions, one blown, one second-chance = 18 points",
-          page.locator("#summary-points").inner_text() == "18",
+    # 1 first-try question up front, then (n - 3) more first-try questions
+    # played out just above, one second-chance (worth basePoints minus the
+    # flat penalty) and one blown question worth nothing.
+    first_try_count = 1 + (n - 3)
+    second_chance_points = cfg["basePoints"] - cfg["penaltyPoints"]
+    expected_points = first_try_count * cfg["basePoints"] + second_chance_points
+    check(f"{n} questions, one blown, one second-chance = {expected_points} points",
+          page.locator("#summary-points").inner_text() == str(expected_points),
           page.locator("#summary-points").inner_text())
-    check("the summary counts 3 of 5 on the first try",
-          page.locator("#summary-firsttry").inner_text() == "3 of 5",
+    check(f"the summary counts {first_try_count} of {n} on the first try",
+          page.locator("#summary-firsttry").inner_text() == f"{first_try_count} of {n}",
           page.locator("#summary-firsttry").inner_text())
 
     # ============ 9. The map stops listening when the round ends ============
@@ -357,22 +374,23 @@ with sync_playwright() as p:
     check("the question text is put away",
           page.locator("#quiz-target").is_hidden())
 
-    # ============ 10. A perfect round scores 25 ============
+    # ============ 10. A perfect round scores basePoints x n ============
     start(page, MODE_9)
-    for _ in range(5):
+    for _ in range(n):
         answer_question(page)
-    check("a perfect 5-question round scores exactly 25",
-          page.locator("#summary-points").inner_text() == "25",
+    expected_perfect = n * cfg["basePoints"]
+    check(f"a perfect {n}-question round scores exactly {expected_perfect}",
+          page.locator("#summary-points").inner_text() == str(expected_perfect),
           page.locator("#summary-points").inner_text())
-    check("25 points becomes 25 seconds of running",
-          page.locator("#summary-seconds").inner_text() == "25")
+    check(f"{expected_perfect} points becomes {expected_perfect} seconds of running",
+          page.locator("#summary-seconds").inner_text() == str(expected_perfect))
 
     # ============ 11. The map is inert on the other screens ============
     # There is only ONE map and it is MOVED from screen to screen, so a
     # listener left switched on would answer questions nobody is asking.
     page.goto(URL + "?debug=1")
     page.wait_for_timeout(300)
-    page.click("#start-button")
+    page.click('.game-button[data-game="states"]')
     page.locator("#mode-list button").nth(MODE_9 - 1).click()
     page.wait_for_timeout(300)
     check("the map on Pick Your Regions is not clickable",
@@ -395,7 +413,7 @@ with sync_playwright() as p:
     # ============ 12. The zoom panel, which is what Gate 6 is about ========
     # The Gate 6 play test found the small states findable but too fiddly
     # to click, so the six worst get a bigger view of their own.
-    start(page, MODE_9, regions=(0, 1))
+    start(page, MODE_9, regions=(1, 2))
     SMALL = ["RI", "MD", "DE", "CT", "MA", "NJ"]
 
     check("the zoom panel is on screen in a click round",
@@ -430,7 +448,10 @@ with sync_playwright() as p:
 
     # ---- clicking in the panel answers the question ----
     # Drive the round to one of the six, then answer it from the panel.
-    for _ in range(10):
+    # All six SMALL states live in region 1, but this round also carries
+    # region 2's questions - the search has to be able to run the whole
+    # combined round, not a guessed handful of tries.
+    for _ in range(safe_drive_to_tries(page, [1, 2])):
         abbr4, name4 = target(page)
         if abbr4 in SMALL:
             break
@@ -476,10 +497,10 @@ with sync_playwright() as p:
     page.goto(URL + "?debug=1")
     page.wait_for_timeout(300)
     page.evaluate("() => { CONFIG.zoomSmallStates = false; }")
-    page.click("#start-button")
+    page.click('.game-button[data-game="states"]')
     page.locator("#mode-list button").nth(MODE_9 - 1).click()
     page.wait_for_timeout(200)
-    page.locator("#region-list input").nth(0).check()
+    check_regions(page, [1])
     page.wait_for_timeout(250)
     page.click("#start-quiz-button")
     page.wait_for_timeout(400)
@@ -497,20 +518,23 @@ with sync_playwright() as p:
           page2.locator(".check-fail").count() == 0)
 
     start(page2, 1)
-    check("Gate 2: Mode 1 still asks 5 questions", hud(page2)[1] == "1 of 5",
+    n2 = region_question_count(page2, [1])
+    check(f"Gate 2: Mode 1 still asks {n2} questions", hud(page2)[1] == f"1 of {n2}",
           hud(page2)[1])
-    for _ in range(5):
+    for _ in range(n2):
         want = page2.evaluate(
             "() => { const s = Quiz.getState(); return s.current[s.rules.asks]; }")
         page2.locator(f'.choice-button[data-answer="{want}"]').click()
         page2.wait_for_timeout(1300)
-    check("Gate 2: a perfect Mode 1 round still scores 25",
-          page2.locator("#summary-points").inner_text() == "25",
+    expected2 = n2 * cfg["basePoints"]
+    check(f"Gate 2: a perfect Mode 1 round still scores {expected2}",
+          page2.locator("#summary-points").inner_text() == str(expected2),
           page2.locator("#summary-points").inner_text())
 
     browser.close()
 
-bad = [c for c in console if c.startswith(("error", "warning"))]
+bad = [c for c in console
+       if c.startswith(("error", "warning")) and not is_noise(c)]
 check("console is clean (no errors or warnings)", not bad, str(bad[:3]))
 
 print("\n=== " + ("GATE 6: ALL CHECKS PASSED" if not problems

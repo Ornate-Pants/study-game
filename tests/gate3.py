@@ -1,6 +1,7 @@
 """Drive the typed spelling modes in Chrome and check Gate 3."""
 import sys
 from playwright.sync_api import sync_playwright
+from browser import launch_args, is_noise, check_regions, region_question_count
 from pathlib import Path
 
 # Where the game is, worked out from where THIS file is, so the
@@ -23,15 +24,15 @@ def check(label, ok, detail=""):
         problems.append(label + " " + detail)
 
 
-def start(page, mode, regions=(0,), debug=True):
-    """mode is 1-based: 2 = State Speller, 3 = Hard."""
+def start(page, mode, regions=(1,), debug=True):
+    """mode is 1-based: 2 = State Speller, 3 = Hard. `regions` are real
+    region ids from data/states.js, not on-screen positions."""
     page.goto(URL + ("?debug=1" if debug else ""))
     page.wait_for_timeout(300)
-    page.click("#start-button")
+    page.click('.game-button[data-game="states"]')
     page.locator("#mode-list button").nth(mode - 1).click()
     page.wait_for_timeout(200)
-    for i in regions:
-        page.locator("#region-list input").nth(i).check()
+    check_regions(page, regions)
     page.wait_for_timeout(250)
     page.click("#start-quiz-button")
     page.wait_for_timeout(350)
@@ -75,13 +76,20 @@ def type_rest(page, word=None):
 
 
 with sync_playwright() as p:
-    browser = p.chromium.launch(channel="chrome")
+    browser = p.chromium.launch(**launch_args())
     page = browser.new_page(viewport={"width": 1280, "height": 1000})
     page.on("console", lambda m: console.append(m.type + ": " + m.text))
     page.on("pageerror", lambda e: problems.append("pageerror: " + str(e)))
 
     # ============ 1. Mode 2 shows a head start, Mode 3 does not ============
     start(page, 2)
+
+    # Read once, reused everywhere below: every section in this file
+    # plays region 1 by default, so its real question count and the
+    # scoring config don't change mid-file.
+    n = region_question_count(page, [1])
+    cfg = page.evaluate("() => CONFIG")
+
     a = answer(page)
     check("Mode 2 gives away the first letter", typed(page) == a[0],
           repr(typed(page)))
@@ -105,9 +113,10 @@ with sync_playwright() as p:
     a = answer(page)
     type_rest(page, a)
     page.wait_for_timeout(1300)
-    check("spelling a word correctly scores 5", hud(page)[0] == 5, str(hud(page)))
+    check(f"spelling a word correctly scores {cfg['basePoints']}",
+          hud(page)[0] == cfg["basePoints"], str(hud(page)))
     check("it moves on by itself once the word is done",
-          hud(page)[1] == "2 of 5", hud(page)[1])
+          hud(page)[1] == f"2 of {n}", hud(page)[1])
 
     # ============ 3. A wrong letter lands, blocks, and backspaces out ======
     start(page, 2)
@@ -141,15 +150,22 @@ with sync_playwright() as p:
 
     type_rest(page, a)
     page.wait_for_timeout(1300)
-    check("a word with a typo in it is still worth the full 5",
-          hud(page)[0] == 5, str(hud(page)))
+    check(f"a word with a typo in it is still worth the full {cfg['basePoints']}",
+          hud(page)[0] == cfg["basePoints"], str(hud(page)))
 
     # ============ 4. Capitalization tooltip ============
-    # New Hampshire is in New England, so drive the round to it.
+    # New Hampshire is in region 1, so drive the round to it.
+    #
+    # The inner loop has to cover the WHOLE round (n questions), not a
+    # fixed guess: it used to be a safe bet that 5 tries covered
+    # everything, back when the region really did hold only 5 states.
+    # With region 1's real size now much bigger, capping the search
+    # short of a full round would make this an occasional coin-flip
+    # instead of the sure thing it looks like.
     found = False
     for _ in range(12):
         start(page, 2)
-        for _q in range(5):
+        for _q in range(n):
             if answer(page) == "New Hampshire":
                 found = True
                 break
@@ -247,11 +263,13 @@ with sync_playwright() as p:
     page.click("#quiz-skip")
     page.wait_for_timeout(1300)
     check("a skipped question does not count as finished",
-          hud(page)[1] == "1 of 5", hud(page)[1])
+          hud(page)[1] == f"1 of {n}", hud(page)[1])
 
-    # play out the rest; the skipped one must come back exactly once
+    # play out the rest; the skipped one must come back exactly once.
+    # Worst case it's the very last thing left, which is n more
+    # appearances away (the n-1 still-fresh questions, then itself).
     seen = []
-    for _ in range(5):
+    for _ in range(n):
         seen.append(page.evaluate("() => Quiz.getState().current.abbr"))
         if page.evaluate("() => Quiz.getState().current.abbr") == skipped:
             break
@@ -279,7 +297,7 @@ with sync_playwright() as p:
     page.click("#quiz-skip")
     page.wait_for_timeout(1300)
 
-    for _ in range(6):
+    for _ in range(n + 1):
         if page.evaluate("() => Quiz.getState().current.abbr") == twice:
             break
         type_rest(page)
@@ -303,20 +321,26 @@ with sync_playwright() as p:
     check("a twice-skipped question never comes back a third time",
           twice not in rest, str(rest))
     check("the HUD never overflows past the round size",
-          page.locator("#summary-firsttry").inner_text().endswith("of 5"),
+          page.locator("#summary-firsttry").inner_text().endswith(f"of {n}"),
           page.locator("#summary-firsttry").inner_text())
-    check("a twice-skipped word scores nothing, so 4 of 5 gives 20",
-          page.locator("#summary-points").inner_text() == "20",
+    remaining = n - 1     # one word skipped twice scores nothing; the rest are clean
+    clean_score = remaining * cfg["basePoints"]
+    check(f"a twice-skipped word scores nothing, so {remaining} of {n} "
+          f"gives {clean_score}",
+          page.locator("#summary-points").inner_text() == str(clean_score),
           page.locator("#summary-points").inner_text())
-    check("the summary counts 4 of 5 on the first try",
-          page.locator("#summary-firsttry").inner_text() == "4 of 5",
+    check(f"the summary counts {remaining} of {n} on the first try",
+          page.locator("#summary-firsttry").inner_text() == f"{remaining} of {n}",
           page.locator("#summary-firsttry").inner_text())
 
     # ============ 7. Mode 3 needs the space typed ============
+    # Same reasoning as Section 4: the inner loop has to cover a whole
+    # round (n questions) to reliably find a multi-word state, not a
+    # fixed guess sized for the old 5-state regions.
     found3 = False
     for _ in range(12):
         start(page, 3)
-        for _q in range(5):
+        for _q in range(n):
             if " " in answer(page):
                 found3 = True
                 break
@@ -347,18 +371,20 @@ with sync_playwright() as p:
           page2.locator(".check-fail").count() == 0)
 
     start(page2, 1)
-    check("Gate 2: Mode 1 still asks 5 questions", hud(page2)[1] == "1 of 5",
+    check(f"Gate 2: Mode 1 still asks {n} questions", hud(page2)[1] == f"1 of {n}",
           hud(page2)[1])
-    for _ in range(5):
+    for _ in range(n):
         page2.locator(f'.choice-button[data-answer="{answer(page2)}"]').click()
         page2.wait_for_timeout(1250)
-    check("Gate 2: a perfect Mode 1 round still scores 25",
-          page2.locator("#summary-points").inner_text() == "25",
+    perfect_score = n * cfg["basePoints"]
+    check(f"Gate 2: a perfect Mode 1 round still scores {perfect_score}",
+          page2.locator("#summary-points").inner_text() == str(perfect_score),
           page2.locator("#summary-points").inner_text())
 
     browser.close()
 
-bad = [c for c in console if c.startswith(("error", "warning"))]
+bad = [c for c in console
+       if c.startswith(("error", "warning")) and not is_noise(c)]
 check("console is clean (no errors or warnings)", not bad, str(bad[:3]))
 
 print("\n=== " + ("GATE 3: ALL CHECKS PASSED" if not problems

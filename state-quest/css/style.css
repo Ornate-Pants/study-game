@@ -54,6 +54,47 @@
   --region-10: #2ca8c2;   /* Pacific ................ cyan   */
 }
 
+/* ============================================================
+   ONE COLOUR SCHEME PER GAME
+
+   Every colour above is a variable, and every rule below uses
+   the variable rather than the colour. So a whole new look is
+   these few lines: main.js puts the game's name on the <body>
+   and the page changes colour.
+
+   The point is not decoration. Two games that look alike are
+   two games you can start by mistake; two that do not, are
+   not. Which one you are in should be obvious from across the
+   room.
+   ============================================================ */
+
+/* The US game keeps the colours the game has always had:
+   blue and slate, like a school atlas. Written out here
+   anyway, so neither game is "the default" and adding a
+   third does not mean untangling which is which. */
+body[data-game="states"] {
+  --blue:      #2563c9;
+  --blue-dark: #1b4a9b;
+  --paper:     #f4f7fb;
+  --ink:       #1a2238;
+  --ink-soft:  #4a5578;
+  --line:      #c8d3e6;
+}
+
+/* The spelling game: warm greens and amber, nothing like the
+   atlas. Contrast is held to the same standard - the ink is
+   still nearly black on nearly white, and only the accents
+   move. */
+body[data-game="spelling"] {
+  --blue:      #1f7a4d;   /* the main action colour is green here */
+  --blue-dark: #155c39;
+  --paper:     #fbf7ef;
+  --ink:       #231d12;
+  --ink-soft:  #5c5140;
+  --line:      #ddd0b4;
+  --gold:      #d98324;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -261,18 +302,23 @@ input:focus-visible {
    Only above 860px, which is the narrowest the page can be and still
    fit three 260px columns. Below that the grid falls back to two
    columns, then one, and every button flows in order as before -
-   holes in a single column of buttons would just look broken. */
+   holes in a single column of buttons would just look broken.
+
+   ALL OF THIS IS THE US GAME'S, and says so. It describes a grid of
+   exactly ten buttons in two pairs; the spelling game has two buttons
+   and would be pushed into rows 3 and 4 of a grid that has nothing in
+   rows 1 and 2. Hence body[data-game="states"] on every line. */
 @media (min-width: 860px) {
-  .mode-list {
+  body[data-game="states"] .mode-list {
     grid-template-columns: repeat(3, 1fr);
   }
 
   /* row / column. Named one by one rather than left to flow, so the
      empty middle cells are on purpose and stay put. */
-  .mode-button[data-mode="7"]  { grid-area: 3 / 1; }
-  .mode-button[data-mode="8"]  { grid-area: 3 / 3; }
-  .mode-button[data-mode="9"]  { grid-area: 4 / 1; }
-  .mode-button[data-mode="10"] { grid-area: 4 / 3; }
+  body[data-game="states"] .mode-button[data-mode="7"]  { grid-area: 3 / 1; }
+  body[data-game="states"] .mode-button[data-mode="8"]  { grid-area: 3 / 3; }
+  body[data-game="states"] .mode-button[data-mode="9"]  { grid-area: 4 / 1; }
+  body[data-game="states"] .mode-button[data-mode="10"] { grid-area: 4 / 3; }
 }
 
 .mode-button {
@@ -1597,4 +1643,384 @@ body.is-map-click #quiz-map .us-map {
   padding: 6px 12px;
   border-radius: 8px;
   z-index: 20;
+}
+
+/* ============================================================
+   GAME SELECT - the first screen
+
+   Two big cards, each painted in its own game's colours, so
+   the choice is visible before it is made.
+   ============================================================ */
+
+.game-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 18px;
+  margin: 24px auto;
+  max-width: 760px;
+  text-align: left;
+}
+
+.game-button {
+  font: inherit;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: var(--card);
+  border: 4px solid var(--line);
+  border-radius: var(--radius);
+  padding: 24px 22px;
+  cursor: pointer;
+  text-align: left;
+  color: var(--ink);
+  box-shadow: var(--shadow);
+}
+
+/* Each card wears its own game's accent, not the one currently on
+   screen. That is the whole job of this screen: showing the
+   difference before you commit to it. */
+.game-button[data-game="states"]   { border-color: #2563c9; }
+.game-button[data-game="spelling"] { border-color: #1f7a4d; }
+
+.game-button:hover:not(:disabled),
+.game-button:focus-visible:not(:disabled) {
+  transform: translateY(-2px);
+  outline: none;
+  box-shadow: 0 6px 0 rgba(26, 34, 56, 0.18);
+}
+
+.game-name {
+  font-size: 26px;
+  font-weight: 700;
+}
+
+.game-button[data-game="states"] .game-name   { color: #1b4a9b; }
+.game-button[data-game="spelling"] .game-name { color: #155c39; }
+
+.game-blurb {
+  font-size: 18px;
+  color: var(--ink-soft);
+}
+
+/* A game that cannot be played on this computer says why, rather
+   than looking broken. The spelling game does this when there is no
+   voice installed. */
+.game-button.is-locked {
+  cursor: not-allowed;
+  opacity: 0.65;
+  border-color: var(--line);
+  transform: none;
+}
+
+.game-tag {
+  margin-top: 6px;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--red);
+}
+
+/* The gear button under the mode cards. */
+.mode-tools {
+  margin-top: 18px;
+  text-align: center;
+}
+
+/* ============================================================
+   SAY IT AGAIN - the spelling game's question
+
+   The word is spoken, so this button IS the question sitting
+   on screen. It is big for that reason, and free for the same
+   one: a spelling test she cannot hear is a hearing test.
+   ============================================================ */
+
+.listen-area {
+  margin: 18px auto 10px;
+  text-align: center;
+}
+
+.listen-button {
+  font-size: 22px;
+  padding: 14px 28px;
+}
+
+.listen-hint {
+  margin: 6px 0 0;
+  font-size: 16px;
+  color: var(--ink-soft);
+}
+
+/* ============================================================
+   THE WORD LIST EDITOR
+   ============================================================ */
+
+.editor-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 22px;
+  text-align: left;
+  margin-top: 12px;
+}
+
+.editor-lists {
+  flex: 0 0 240px;
+}
+
+.editor-pane {
+  flex: 1;
+  min-width: 0;
+}
+
+.editor-heading {
+  font-size: 19px;
+  margin: 0 0 8px;
+}
+
+.editor-list-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.editor-list-button {
+  font: inherit;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--card);
+  border: 3px solid var(--line);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  cursor: pointer;
+  text-align: left;
+  color: var(--ink);
+}
+
+.editor-list-button.is-open {
+  border-color: var(--blue);
+  background: var(--paper);
+}
+
+.editor-list-name {
+  font-weight: 700;
+}
+
+.editor-list-count {
+  font-size: 15px;
+  color: var(--ink-soft);
+}
+
+.editor-field {
+  display: block;
+  margin-bottom: 16px;
+}
+
+.editor-label {
+  display: block;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.editor-help {
+  display: block;
+  font-size: 16px;
+  color: var(--ink-soft);
+  margin: 0 0 6px;
+}
+
+.editor-help code {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 1px 6px;
+}
+
+.editor-input,
+.editor-words {
+  font: inherit;
+  width: 100%;
+  background: var(--card);
+  border: 3px solid var(--line);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  color: var(--ink);
+}
+
+.editor-words {
+  font-family: "Consolas", "Courier New", monospace;
+  font-size: 18px;
+  line-height: 1.6;
+  resize: vertical;
+}
+
+.editor-input:focus,
+.editor-words:focus {
+  outline: none;
+  border-color: var(--blue);
+}
+
+.editor-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: var(--card);
+  border: 3px solid var(--line);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  margin-bottom: 16px;
+  cursor: pointer;
+}
+
+.editor-check input {
+  width: 22px;
+  height: 22px;
+  margin-top: 3px;
+  flex: 0 0 auto;
+}
+
+.editor-check-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.editor-check-blurb {
+  font-size: 16px;
+  color: var(--ink-soft);
+}
+
+.editor-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+
+.danger-button {
+  border-color: var(--red);
+  color: var(--red);
+}
+
+.danger-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* --- The read-back: every word as the game understood it --- */
+
+.editor-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.editor-chip {
+  font: inherit;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  background: var(--card);
+  border: 2px solid var(--line);
+  border-radius: 999px;
+  padding: 6px 16px;
+  cursor: pointer;
+  color: var(--ink);
+  max-width: 100%;
+}
+
+.editor-chip:hover,
+.editor-chip:focus-visible {
+  border-color: var(--blue);
+  outline: none;
+}
+
+.editor-chip-icon {
+  font-size: 15px;
+}
+
+.editor-chip-word {
+  font-weight: 700;
+}
+
+.editor-chip-sentence {
+  font-size: 15px;
+  color: var(--ink-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 260px;
+}
+
+.editor-notes {
+  margin-bottom: 12px;
+}
+
+/* Notes, not refusals. Nothing here stops a list being saved; they
+   are the things worth knowing before she meets the word. */
+.editor-note {
+  font-size: 16px;
+  color: var(--ink-soft);
+  background: var(--card);
+  border-left: 4px solid var(--gold);
+  border-radius: 6px;
+  margin: 6px 0;
+  padding: 6px 10px;
+}
+
+.editor-backup {
+  text-align: left;
+  margin: 18px 0;
+  border: 3px solid var(--line);
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  background: var(--card);
+}
+
+.editor-backup summary {
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.editor-backup[open] summary {
+  margin-bottom: 10px;
+}
+
+.editor-status {
+  min-height: 1.5em;
+  font-weight: 700;
+  color: var(--blue-dark);
+}
+
+/* Stacked once there is not the width for a column of lists beside
+   the one being edited. */
+@media (max-width: 800px) {
+  .editor-row {
+    display: block;
+  }
+
+  .editor-lists {
+    margin-bottom: 20px;
+  }
+
+  .editor-list-buttons {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+}
+
+/* The "no voice on this computer" line under the Say it again button.
+   Loud on purpose: it is the difference between a quiet game and a
+   broken one, and nothing else on screen would explain the silence. */
+.listen-trouble {
+  margin: 10px auto 0;
+  max-width: 520px;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--red);
+  background: var(--card);
+  border: 3px solid var(--red);
+  border-radius: var(--radius);
+  padding: 10px 14px;
 }

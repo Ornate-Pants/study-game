@@ -89,16 +89,11 @@ const QUIZ_DATA = {
     "mapAsset": "assets/map/us-states.svg"
   },
   "regions": {
-    "1":  "New England",
-    "2":  "Mid-Atlantic",
-    "3":  "South Atlantic",
-    "4":  "Deep South",
-    "5":  "Appalachia & Ohio Valley",
-    "6":  "Great Lakes",
-    "7":  "Great Plains",
-    "8":  "Southwest",
-    "9":  "Mountain West",
-    "10": "Pacific"
+    "1": "Northeast",
+    "2": "Southeast",
+    "3": "Midwest",
+    "4": "Southwest",
+    "5": "West"
   },
   "items": [
     {
@@ -114,27 +109,31 @@ const QUIZ_DATA = {
 ```
 
 Rules:
-- `region` is an integer 1-10 so you can re-map to the teacher's regions by editing one number per state.
+- `region` is an integer matching one of the ids in `regions` above, so you can re-map to the
+  teacher's regions by editing one number per state - there is no fixed number of regions, and
+  none is assumed anywhere in the engine or the tests.
 - `abbr` doubles as the SVG element id, keeping map lookup trivial.
 - `capitalAlternates` handles legitimate spelling variants (Saint Paul / St. Paul). Comparison rules in Section 6.
-- Exactly 5 states per region in the initial data (see Appendix A) so rounds stay short.
+- Regions do not have to be the same size (see Appendix A). A round's length is however many
+  states are in the regions picked, read live rather than assumed.
 
 ---
 
-## 5. Regions (initial assignment, baked in now, re-map later if needed)
+## 5. Regions (re-mapped once already; expect it to happen again)
+
+The table below is whatever `data/states.js` currently ships - it has already been re-grouped
+once, from the original 10 evenly-sized regions to the 5 uneven ones shown here, to match a real
+school's own lists. That is the point of keeping `region` a plain integer per state: nothing else
+in the engine, the config, or the tests assumes a particular number of regions or a particular
+size for any of them, so this table can be edited again the same way without touching code.
 
 | # | Region | States |
 |---|--------|--------|
-| 1 | New England | ME, NH, VT, MA, RI |
-| 2 | Mid-Atlantic | CT, NY, NJ, PA, DE |
-| 3 | South Atlantic | MD, VA, NC, SC, GA |
-| 4 | Deep South | FL, AL, MS, LA, AR |
-| 5 | Appalachia & Ohio Valley | WV, KY, TN, OH, IN |
-| 6 | Great Lakes | MI, IL, WI, MN, IA |
-| 7 | Great Plains | MO, KS, NE, SD, ND |
-| 8 | Southwest | TX, OK, NM, AZ, NV |
-| 9 | Mountain West | CO, UT, WY, MT, ID |
-| 10 | Pacific | WA, OR, CA, AK, HI |
+| 1 | Northeast | ME, NH, VT, MA, RI, CT, NY, NJ, PA, DE, MD |
+| 2 | Southeast | VA, NC, SC, GA, FL, AL, MS, LA, AR, WV, KY, TN |
+| 3 | Midwest | OH, IN, MI, IL, WI, MN, IA, MO, KS, NE, SD, ND |
+| 4 | Southwest | TX, OK, NM, AZ |
+| 5 | West | NV, CO, UT, WY, MT, ID, WA, OR, CA, AK, HI |
 
 ---
 
@@ -225,8 +224,8 @@ const CONFIG = {
   basePoints: 5,              // flat points for a first-try correct answer,
                                // same value no matter how many regions are picked
   regionBonusPerRegion: 10,    // added ONCE to the final combined score, not
-                               // per question. 1 region=10, 3 regions=30,
-                               // 10 regions (all states)=100
+                               // per question, per region picked - 3 regions
+                               // picked = 30, however many states are in them
   hintDelaySeconds: 8,         // hint button appears after this
   penaltyPoints: 2,            // flat cost of needing a second chance, whether
                                // that was a hint, a skip, or a 2nd pick.
@@ -372,7 +371,7 @@ Move him with the physics body's own reposition, not by setting the drawn shape'
 
 Claude Code should execute phase by phase and STOP at each gate to be tested in a browser before continuing. Each gate lists exactly what to check.
 
-**Progress: Phases 0-7 and 5B are BUILT. v1.0 and v1.1 are shipped and tagged; Phase 7 (v2.0) passed its gate in play. Phase 8 is BUILT and its automated checks pass; it is waiting on GATE 8, a person at a browser. That is every phase in this plan.**
+**Progress: Phases 0-10 and 5B are BUILT. v1.0 and v1.1 are shipped and tagged; Phase 7 (v2.0) passed its gate in play; Phase 8 (v2.1) is built and its checks pass. Phases 9 and 10 (v3.0) add a SECOND GAME and are built; their automated checks pass, and GATE 9 and GATE 10 want a person at a browser — one of them with working speakers.**
 
 ### Phase 0: Scaffold (v1.0) — DONE, gate passed
 Project structure, `index.html` loading everything via script tags from `file://`, Phaser bundled locally, empty screen state machine (Title -> stub screens), config + full states data file (Appendix A).
@@ -380,7 +379,8 @@ Project structure, `index.html` loading everything via script tags from `file://
 
 ### Phase 1: Map + Data (v1.0) — DONE, gate passed
 Acquire and integrate the SVG per Section 10. Build the highlight test page. Region select screen with live map preview (selected regions' states tinted).
-**GATE 1:** All 50 states highlight correctly; region checkboxes tint the right 5 states each.
+**GATE 1:** All 50 states highlight correctly; region checkboxes tint the right states for that
+region, whatever its size.
 
 ### Phase 2: Quiz Engine, Mode 1 (v1.0) — DONE, gate passed
 Question queue, shuffling, MC rendering, 2nd-chance logic, scoring per Section 8 (flat `basePoints` per question; the region bonus is added once at the results screen and never during the quiz), the flat second-chance penalty, reveal/retire, green/red feedback, round summary screen.
@@ -549,11 +549,46 @@ The switch described in Section 14, for all built modes: no hints, no second cha
 >
 > `tests/gate8.py` covers all of it; the full suite (gates 1-8) passes.
 
+### Phase 9: A second game — Spelling List (v3.0) — BUILT, awaiting gate
+See Section 15. The engine stopped knowing what a state is; a game picker became the first
+screen; a word is read out loud instead of shown; the weekly word lists are edited inside the
+game; each game keeps its own high score table and its own colours.
+
+Built in four steps, in this order, because the first carries all the regression risk:
+
+- **9A, the refactor, nothing new.** `js/games.js` arrives holding one entry, the US game. The
+  mode tables move into it, and every `USMap.*` call and `QUIZ_DATA` reference in `js/quiz.js`
+  goes through the game instead. Nothing on screen changes.
+- **9B, the voice.** `js/speech.js`, plus four numbers in `data/config.js`.
+- **9C, data and picker.** `data/spelling.js`, `js/spelling-store.js`, the game-select screen,
+  `body[data-game]` and the two colour schemes.
+- **9D, the game.** `GAMES.spelling`, its two modes, the voice stage, the free "Say it again"
+  button, the next-letter hint, the capitals switch, and separate high scores.
+
+**GATE 9A:** all eight existing suites pass, unchanged in what they check, AND a double-clicked
+`index.html` plays a round of Mode 2 and a round of Mode 9 exactly as before.
+**GATE 9:** on the computer she actually plays on, with the sound up: the word is read clearly,
+the word is never on screen, "Say it again" never costs a point, Hint gives one letter for 2
+points, points become running seconds, and the score lands on a spelling-only table with the
+states table untouched.
+
+### Phase 10: The word list editor (v3.0) — BUILT, awaiting gate
+The gear on the spelling game's mode select. Lists added, renamed and deleted; words one per
+line; the "Capital letters must match" tick box; the optional example sentence; every word read
+back with a button to hear it; and the copy-and-paste backup. Exam Mode carries over to the
+spelling game with no new code — it is still a switch.
+
+**GATE 10:** a parent who has never seen the code changes next week's words, saves, closes the
+browser, reopens it, and the new words are there. An exam round marks nothing until the end and
+its review screen groups by word list.
+
 ---
 
 ## 13. Testing Notes for Claude Code
 
-- Add a `?debug=1` URL flag: shows the answer on screen, sets runner test timer, unlocks all modes. Never on by default.
+- Add a `?debug=1` URL flag: shows the answer on screen, sets runner test timer, unlocks all modes. Never on by default. **In the spelling game this matters more than anywhere else**: the whole game rests on the word not being visible, so any check about what is *visible* must run with the flag off, or it is worth nothing.
+- **Speech cannot be listened for.** Most machines a suite runs on have no voice installed at all. `Speech.debugScript()` reports what was handed to the reader, in order — that is the part the game is responsible for, and it is what `tests/gate9.py` asserts. Whether a voice then says it out loud is checked by a person with ears, at GATE 9.
+- **`STATE_QUEST_CHROME`** points the suite at a particular browser binary, for machines with no Google Chrome installed. Unset, nothing changes: the suite drives the real Chrome, deliberately, for the reason `tests/README.md` gives.
 - Console-log the scoring math per question in debug mode so gate checks are easy.
 - Manual browser testing on `file://` in Chrome is the acceptance environment. Do not rely on dev-server-only behavior.
 - Keep functions small and commented; This code may be read with future Claude sessions.
@@ -604,14 +639,14 @@ answer is marked.
   he was wrong — the right answer. A skipped question shows the right answer with a blank where
   his would have been.
 - **A per-region tally**, which is what tells you where to focus:
-  *"Great Lakes 5/5 · New England 3/5 · Pacific 4/5"*.
+  *"Midwest 9 of 12 · Northeast 8 of 11"*.
 
 > **Built grouped by region, not "in order" as this section first said** (a deliberate call, Phase 8).
 > Each region is a heading carrying its own tally, with its questions underneath. The reason for
 > the change is the reason the tally exists: it is there to say where to focus, and grouping puts
-> every wrong answer directly under the heading that counts it. A ten-region exam is fifty rows,
-> and in one flat list the four he got wrong are scattered through it. Order *within* each region
-> is still the order he answered them.
+> every wrong answer directly under the heading that counts it. An all-regions exam is fifty rows
+> however many regions those 50 states are currently split into, and in one flat list the ones he
+> got wrong are scattered through it. Order *within* each region is still the order he answered them.
 - Then **"Start Bonus Round!"** as usual. Quiz points still become running seconds, so the
   exam still earns playing time.
 
@@ -639,7 +674,103 @@ ranked against a practice one. The high score table gains a mark on exam rows.
 
 ---
 
-## Appendix A: Full State Data (authoritative, do not invent values)
+## 15. The Spelling List game (v3.0 — built in Phases 9 and 10)
+
+A second GAME, not an eleventh mode. Asked for after the first game worked: the same loop —
+answer questions, earn running time, chase a score — is the right shape for a weekly spelling
+list, but a spelling game cannot do the one thing every existing mode does, which is show the
+thing being asked about.
+
+### The rule the whole game rests on
+
+**THE WORD IS NEVER ON SCREEN.** It is spoken. Putting it on screen would be showing the
+spelling, which is the thing being asked for; a spelling game that shows the word is a typing
+game. Everything else here follows from that one line, including the parts that look like
+over-engineering:
+
+- There is a free, unlimited **"Say it again"** button, and it must never cost a point. The
+  word is the QUESTION. Charging to re-hear it turns a spelling test into a hearing test.
+  It is bound to Enter as well, which is free in a practice round because every printable key
+  is taken by the spelling itself.
+- A word may carry an **example sentence**, spoken after it. Without one, "their" and "there"
+  are the same question with two right answers, and she is marked wrong for spelling a real
+  word correctly. Most words need no sentence.
+- If the computer has **no voice installed**, the game says so — on the game-select card
+  before she picks it, and on the quiz screen if we only find out later. It never falls back
+  to showing the word. A silent fallback would change what the game tests without telling
+  anyone it had.
+
+### How the engine came to serve two games
+
+`js/quiz.js` talked to the US map and the states data by name. That was right while there was
+one subject. Adding a second meant the engine had to stop knowing what a state is, so
+everything subject-specific moved to **`js/games.js`**, and the engine asks a GAME for it:
+where the questions come from, what tells two apart, and the **stage** — the part of the screen
+a question appears ON. The map is one stage; the voice is another. The spelling stage does
+nothing at all for most of the stage's methods, which is the point.
+
+The refactor was done first and alone, with the eight existing suites as its gate, because it
+touched 22 call sites in a 1600-line file that all eight depended on.
+
+### Capitalization, which came out nearly free
+
+`mustBeCapital()` already opened with *"is the letter in the answer a capital? no? then no
+capital is required."* So **which words need a capital is how you type them in the list**:
+`Monday` asks for one, `because` never does. Nothing extra to fill in, and nothing new to build.
+
+The **"Capital letters must match"** tick box per list is one early return on top of that. With
+it off, `monday` is accepted — and because the engine already accepts the canonical letter
+rather than the typed one, the screen fills in the capital M, so the right spelling is still
+what she ends up looking at. Exam Mode had to be taught the same thing, or practice and the
+exam would mark the same answer differently.
+
+### The word lists
+
+Editable inside the game, behind a gear on the mode-select screen, because a weekly list that
+needs a text editor is a weekly list that stops getting changed.
+
+- **One rule about where words come from:** nothing saved yet, use `data/spelling.js`; anything
+  saved, use that and never look at the file again. Merging the two would mean a list you
+  deleted kept coming back.
+- **Words are one per line in one box**, not a row each. Pasting twelve words off a school
+  handout takes five seconds; building twelve rows takes two minutes. What a box loses is that
+  a typo hides in it — so every word is read back underneath, with a button to hear it.
+- **Curly apostrophes are straightened on the way in.** A list pasted out of a Word document
+  arrives with `don’t`, and the key on her keyboard makes the other kind. She would spell the
+  word perfectly, be told she was wrong, and have nothing on screen to show the difference.
+- **The copy-and-paste backup is not optional.** `localStorage` on `file://` is wiped by "clear
+  browsing data" and belongs to one browser on one computer. Without a way out, every week's
+  list is one stray click from gone.
+
+### Scores, and what is not comparable
+
+Each game keeps its own top ten, under its own key. The US game keeps the old key
+(`stateQuest.highScores`) so scores saved before there was a second game survive untouched.
+A spelling round and a states round were never the same thing to rank against each other.
+
+### Judgment calls made here (flag any of these if wrong)
+
+- The **Hint reveals the next letter** and costs the same flat `penaltyPoints`. In the US game
+  it names the lit-up state; there is no equivalent here, and one letter is the smallest useful
+  help. It goes in through the same door a typed letter does, so a hint on the last letter
+  finishes the word properly.
+- **The game picker replaced the title screen** rather than sitting after it. Which game you are
+  playing is the first thing to decide, and a Start button in front of it is a click that asks
+  nothing.
+- **"Play Again" returns to the same game's mode list**, not to the picker. Another go at the
+  same game is much the commoner want.
+- **Word lists are the regions analogue**, so the bonus maths, the tick-box screen and the exam
+  review grouping are all unchanged. Keeping old weeks also makes cumulative review possible.
+- **A word appearing in two lists is asked twice.** That is what practising it twice looks like,
+  so it is flagged in the editor rather than prevented.
+- **Not built, and worth saying out loud:** nothing here asks the words she gets wrong more
+  often. Spaced repetition would be the single biggest learning win available, and the engine
+  already re-queues a skipped word once. It belongs in a later phase, not this one.
+
+---
+
+
+## Appendix A: Full State Data (authoritative, do not invent values - mirrors `data/states.js`)
 
 | State | Abbr | Capital | Region | Capital Alternates |
 |-------|------|---------|--------|--------------------|
@@ -648,51 +779,51 @@ ranked against a practice one. The high score table gains a mark on exam rows.
 | Vermont | VT | Montpelier | 1 | |
 | Massachusetts | MA | Boston | 1 | |
 | Rhode Island | RI | Providence | 1 | |
-| Connecticut | CT | Hartford | 2 | |
-| New York | NY | Albany | 2 | |
-| New Jersey | NJ | Trenton | 2 | |
-| Pennsylvania | PA | Harrisburg | 2 | |
-| Delaware | DE | Dover | 2 | |
-| Maryland | MD | Annapolis | 3 | |
-| Virginia | VA | Richmond | 3 | |
-| North Carolina | NC | Raleigh | 3 | |
-| South Carolina | SC | Columbia | 3 | |
-| Georgia | GA | Atlanta | 3 | |
-| Florida | FL | Tallahassee | 4 | |
-| Alabama | AL | Montgomery | 4 | |
-| Mississippi | MS | Jackson | 4 | |
-| Louisiana | LA | Baton Rouge | 4 | |
-| Arkansas | AR | Little Rock | 4 | |
-| West Virginia | WV | Charleston | 5 | |
-| Kentucky | KY | Frankfort | 5 | |
-| Tennessee | TN | Nashville | 5 | |
-| Ohio | OH | Columbus | 5 | |
-| Indiana | IN | Indianapolis | 5 | |
-| Michigan | MI | Lansing | 6 | |
-| Illinois | IL | Springfield | 6 | |
-| Wisconsin | WI | Madison | 6 | |
-| Minnesota | MN | Saint Paul | 6 | St. Paul |
-| Iowa | IA | Des Moines | 6 | |
-| Missouri | MO | Jefferson City | 7 | |
-| Kansas | KS | Topeka | 7 | |
-| Nebraska | NE | Lincoln | 7 | |
-| South Dakota | SD | Pierre | 7 | |
-| North Dakota | ND | Bismarck | 7 | |
-| Texas | TX | Austin | 8 | |
-| Oklahoma | OK | Oklahoma City | 8 | |
-| New Mexico | NM | Santa Fe | 8 | |
-| Arizona | AZ | Phoenix | 8 | |
-| Nevada | NV | Carson City | 8 | |
-| Colorado | CO | Denver | 9 | |
-| Utah | UT | Salt Lake City | 9 | |
-| Wyoming | WY | Cheyenne | 9 | |
-| Montana | MT | Helena | 9 | |
-| Idaho | ID | Boise | 9 | |
-| Washington | WA | Olympia | 10 | |
-| Oregon | OR | Salem | 10 | |
-| California | CA | Sacramento | 10 | |
-| Alaska | AK | Juneau | 10 | |
-| Hawaii | HI | Honolulu | 10 | |
+| Connecticut | CT | Hartford | 1 | |
+| New York | NY | Albany | 1 | |
+| New Jersey | NJ | Trenton | 1 | |
+| Pennsylvania | PA | Harrisburg | 1 | |
+| Delaware | DE | Dover | 1 | |
+| Maryland | MD | Annapolis | 1 | |
+| Virginia | VA | Richmond | 2 | |
+| North Carolina | NC | Raleigh | 2 | |
+| South Carolina | SC | Columbia | 2 | |
+| Georgia | GA | Atlanta | 2 | |
+| Florida | FL | Tallahassee | 2 | |
+| Alabama | AL | Montgomery | 2 | |
+| Mississippi | MS | Jackson | 2 | |
+| Louisiana | LA | Baton Rouge | 2 | |
+| Arkansas | AR | Little Rock | 2 | |
+| West Virginia | WV | Charleston | 2 | |
+| Kentucky | KY | Frankfort | 2 | |
+| Tennessee | TN | Nashville | 2 | |
+| Ohio | OH | Columbus | 3 | |
+| Indiana | IN | Indianapolis | 3 | |
+| Michigan | MI | Lansing | 3 | |
+| Illinois | IL | Springfield | 3 | |
+| Wisconsin | WI | Madison | 3 | |
+| Minnesota | MN | Saint Paul | 3 | St. Paul |
+| Iowa | IA | Des Moines | 3 | |
+| Missouri | MO | Jefferson City | 3 | |
+| Kansas | KS | Topeka | 3 | |
+| Nebraska | NE | Lincoln | 3 | |
+| South Dakota | SD | Pierre | 3 | |
+| North Dakota | ND | Bismarck | 3 | |
+| Texas | TX | Austin | 4 | |
+| Oklahoma | OK | Oklahoma City | 4 | |
+| New Mexico | NM | Santa Fe | 4 | |
+| Arizona | AZ | Phoenix | 4 | |
+| Nevada | NV | Carson City | 5 | |
+| Colorado | CO | Denver | 5 | |
+| Utah | UT | Salt Lake City | 5 | |
+| Wyoming | WY | Cheyenne | 5 | |
+| Montana | MT | Helena | 5 | |
+| Idaho | ID | Boise | 5 | |
+| Washington | WA | Olympia | 5 | |
+| Oregon | OR | Salem | 5 | |
+| California | CA | Sacramento | 5 | |
+| Alaska | AK | Juneau | 5 | |
+| Hawaii | HI | Honolulu | 5 | |
 
 ---
 
@@ -703,12 +834,12 @@ ranked against a practice one. The high score table gains a mark on exam rows.
 3. **Stun keeps the countdown running** rather than adding a separate time penalty; losing 3+ seconds of collecting IS the cost.
 4. **Region bonus:** flat `10 * regionCount`, added once at the end of the round (not per-question, not compounded). Per-question value is always flat `basePoints`; more regions only lengthens the round by adding more questions. The hint/skip penalty values were flagged here as un-retuned; **these have since been settled** — one flat `penaltyPoints: 2` for every kind of second chance. See Section 8.
 5. **Distractor choices** in MC modes prefer same-region states so the quiz teaches discrimination between neighbors.
-6. **Region groupings** in Section 5 are approved placeholders; teacher regions will be re-mapped by editing `region` integers only.
+6. **Region groupings** in Section 5 are approved placeholders; teacher regions will be re-mapped by editing `region` integers only. **SETTLED, and it already happened once:** the original 10 even regions were re-grouped into 5 uneven ones to match a real school's lists, by editing only `region` integers as planned. Nothing in the engine, config, or tests assumes a region count or size, so this can happen again the same way.
 
 ### Decided during the build (Phases 1-3), all approved unless noted
 
 7. **Washington DC is drawn but inert.** It is on the map, because a US map without it looks wrong, but it is never a question, never tinted, and clicks pass straight through it. It is not in `states.js` and does not need to be.
-8. **Region colours:** each of the 10 regions gets its own colour rather than one shared highlight, so neighbouring picked regions never merge into one blob. The dot on each region checkbox is the map's key. All ten live as CSS variables in `style.css`.
+8. **Region colours:** each region gets its own colour rather than one shared highlight, so neighbouring picked regions never merge into one blob. The dot on each region checkbox is the map's key. `style.css` predefines 10 of these variables; only as many are used as there are regions in `data/states.js` at the time.
 9. **The "look here" ring** around the state being asked about — see the note in Section 10. Without it, small states are unreadable as a question.
 10. **Per-state hover labels stripped from the map** — they gave the answer away on mouseover. See Section 10.
 11. **Auto-advance between questions**, after a green flash lasting `feedbackSeconds`, rather than a "Next" button. Keeps a 5-question round moving without extra clicking.

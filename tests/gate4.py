@@ -1,6 +1,7 @@
 """Drive the Phaser bonus round in Chrome and check Gate 4."""
 import sys
 from playwright.sync_api import sync_playwright
+from browser import launch_args, is_noise, check_regions, region_question_count
 from pathlib import Path
 import time
 import math
@@ -37,7 +38,7 @@ def launch_test_runner(page):
 
 
 with sync_playwright() as p:
-    browser = p.chromium.launch(channel="chrome")
+    browser = p.chromium.launch(**launch_args())
     page = browser.new_page(viewport={"width": 1280, "height": 950})
     page.on("console", lambda m: console.append(m.type + ": " + m.text))
     page.on("pageerror", lambda e: problems.append("pageerror: " + str(e)))
@@ -350,30 +351,46 @@ with sync_playwright() as p:
     # ============ 7. A real round, end to end ===========================
     page.goto(URL + "?debug=1")
     page.wait_for_timeout(350)
-    page.click("#start-button")
+    page.click('.game-button[data-game="states"]')
     page.locator("#mode-list button").nth(0).click()
     page.wait_for_timeout(200)
-    page.locator("#region-list input").nth(0).check()
+    check_regions(page, [1])
     page.wait_for_timeout(250)
     page.click("#start-quiz-button")
     page.wait_for_timeout(300)
-    for _ in range(5):
+    n = region_question_count(page, [1])
+    for _ in range(n):
         correct = page.evaluate(
             "() => { const s = Quiz.getState(); return s.current[s.rules.asks]; }")
         page.locator(f'.choice-button[data-answer="{correct}"]').click()
         page.wait_for_timeout(1250)
 
-    check("a perfect round still scores 25 in the quiz",
-          page.locator("#summary-points").inner_text() == "25")
+    expected_score = n * cfg["basePoints"]
+    check(f"a perfect round still scores {expected_score} in the quiz",
+          page.locator("#summary-points").inner_text() == str(expected_score))
     page.click("#start-runner-button")
     page.wait_for_timeout(800)
     s = st(page)
     check("the runner timer starts at the quiz score",
-          23 < s["secondsLeft"] <= 25, str(round(s["secondsLeft"], 1)))
+          expected_score - 2 < s["secondsLeft"] <= expected_score,
+          str(round(s["secondsLeft"], 1)))
 
     page.wait_for_timeout(3000)
-    coins_now = st(page)["coins"]
-    page.click("#finish-runner-button")          # debug: end early
+    # Read the coin count and press Finish in the SAME script tick, not two
+    # separate round trips. Phaser's game loop keeps running between a
+    # page.evaluate() and a page.click() - both cross back to Python and
+    # back - so a coin could be picked up in that gap, sampled "before"
+    # would then read low against what the round actually hands back.
+    # Seen once in a full run-all.py pass: 1 coin sampled, 2 coins (10 pts)
+    # on the results screen. This coin-related failure did not reproduce
+    # in 5 runs once fixed this way (an unrelated flake, the runner's
+    # own "pit freeze" timing check, showed up once in that same batch -
+    # see tests/README.md's own note on measurement checks being fiddly).
+    coins_now = page.evaluate("""() => {
+        const before = Runner.debugState().coins;
+        document.getElementById('finish-runner-button').click();
+        return before;
+    }""")
     page.wait_for_timeout(1500)
 
     check("ending the round reaches the results screen",
@@ -423,7 +440,8 @@ with sync_playwright() as p:
 
     browser.close()
 
-bad = [c for c in console if c.startswith(("error", "warning"))]
+bad = [c for c in console
+       if c.startswith(("error", "warning")) and not is_noise(c)]
 check("console is clean (no errors or warnings)", not bad, str(bad[:3]))
 
 print("\n=== " + ("GATE 4: ALL CHECKS PASSED" if not problems

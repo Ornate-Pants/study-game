@@ -1,6 +1,8 @@
 """Drive the real game in a browser and check Gate 1 (and Gate 0 still passes)."""
 import sys
 from playwright.sync_api import sync_playwright
+from browser import (launch_args, is_noise, check_regions, region_checkbox,
+                      region_question_count, region_abbrs)
 from pathlib import Path
 
 # Where the game is, worked out from where THIS file is, so the
@@ -15,6 +17,20 @@ URL = GAME.joinpath("index.html").as_uri()
 
 errors = []
 logs = []
+
+
+def wait_for_runner(page, ms=15000):
+    """Wait until the bonus round is actually running.
+
+    Phaser needs a moment to boot, and how long depends entirely on the
+    machine - on a slow one it is well past any sleep worth writing. A
+    fixed wait here meant the round was ended before there was a round
+    to end, the results screen was never reached, and every check after
+    it failed for a reason that had nothing to do with it.
+    tests/README.md says it plainly: wait for the thing, do not sleep a
+    guessed amount.
+    """
+    page.wait_for_function("() => Runner.isRunning()", timeout=ms)
 
 
 def fills(page):
@@ -41,7 +57,7 @@ def play_out_runner(page):
     it holds a short "Time!" pause before handing back to the results.
     """
     page.click("#start-runner-button")
-    page.wait_for_timeout(900)             # let Phaser boot
+    wait_for_runner(page)                  # let Phaser boot
     page.click("#finish-runner-button")    # debug button: end it now
     page.wait_for_timeout(1800)            # the "Time!" pause
 
@@ -60,20 +76,20 @@ def check(label, ok, detail=""):
 
 
 with sync_playwright() as p:
-    browser = p.chromium.launch(channel="chrome")
+    browser = p.chromium.launch(**launch_args())
     page = browser.new_page(viewport={"width": 1280, "height": 1000})
 
     page.on("console", lambda m: (
         logs.append(m.type + ": " + m.text),
         errors.append("console " + m.type + ": " + m.text)
-        if m.type in ("error", "warning") else None))
+        if m.type in ("error", "warning") and not is_noise(m.text) else None))
     page.on("pageerror", lambda e: errors.append("pageerror: " + str(e)))
 
     page.goto(URL + "?debug=1")
     page.wait_for_timeout(400)
 
     # --- walk to the region screen ---
-    page.click("#start-button")
+    page.click('.game-button[data-game="states"]')
     page.click("#mode-list button:first-child")
     page.wait_for_timeout(300)
 
@@ -81,30 +97,34 @@ with sync_playwright() as p:
           page.locator("#region-map-preview svg.us-map").count() == 1)
     check("map starts with nothing tinted", tinted(page) == [])
 
-    boxes = page.locator("#region-list input[type=checkbox]")
-
     # --- one region ---
-    boxes.nth(0).check()
+    # Region ids are stable even though how many regions exist, what
+    # they're named, and which states are in them are not - see
+    # data/states.js's own header. Picking by id (1) and reading the
+    # expected membership live means this keeps working no matter how
+    # the regions get reshuffled next.
+    check_regions(page, [1])
     page.wait_for_timeout(250)
-    check("New England tints exactly ME NH VT MA RI",
-          tinted(page) == ["MA", "ME", "NH", "RI", "VT"], str(tinted(page)))
+    check("region 1 tints exactly its own states",
+          tinted(page) == region_abbrs(page, [1]), str(tinted(page)))
     page.screenshot(path=str(SHOTS / "g1-one-region.png"), full_page=True)
 
     # --- two regions, two colors ---
-    boxes.nth(9).check()
+    check_regions(page, [5])
     page.wait_for_timeout(250)
     two = tinted(page)
-    check("adding Pacific makes 10 tinted states", len(two) == 10, str(two))
+    check("adding a second region tints both regions' states",
+          two == region_abbrs(page, [1, 5]), str(two))
     f = fills(page)
     check("the two regions use different colors", f["ME"] != f["WA"],
           f["ME"] + " vs " + f["WA"])
     page.screenshot(path=str(SHOTS / "g1-two-regions.png"), full_page=True)
 
     # --- unticking clears only that region ---
-    boxes.nth(0).uncheck()
+    region_checkbox(page, 1).uncheck()
     page.wait_for_timeout(250)
-    check("unticking New England leaves only Pacific tinted",
-          tinted(page) == ["AK", "CA", "HI", "OR", "WA"], str(tinted(page)))
+    check("unticking region 1 leaves only region 5 tinted",
+          tinted(page) == region_abbrs(page, [5]), str(tinted(page)))
 
     # --- pick all / clear ---
     page.click("#pick-all-button")
@@ -113,8 +133,10 @@ with sync_playwright() as p:
     check("Pick All tints all 50 states (DC stays gray)",
           len(all_t) == 50 and "DC" not in all_t, str(len(all_t)))
     colors = {fills(page)[a] for a in all_t}
-    check("Pick All shows 10 distinct region colors", len(colors) == 10,
-          str(len(colors)))
+    region_count = page.evaluate("() => Object.keys(QUIZ_DATA.regions).length")
+    check(f"Pick All shows {region_count} distinct region colors "
+          "(one per region)",
+          len(colors) == region_count, str(len(colors)))
     page.screenshot(path=str(SHOTS / "g1-all-regions.png"), full_page=True)
 
     page.click("#clear-regions-button")
@@ -136,11 +158,12 @@ with sync_playwright() as p:
     # --- Gate 0 must still pass: full walk through the round ---
     # (Phase 2 replaced the stub "Finish Quiz" button with a real
     # Mode 1 round, so this plays it instead of clicking through.)
-    boxes.nth(0).check()
+    check_regions(page, [1])
     page.wait_for_timeout(150)
     page.click("#start-quiz-button")
     page.wait_for_timeout(300)
-    for _ in range(5):
+    n = region_question_count(page, [1])
+    for _ in range(n):
         correct = page.evaluate(
             "() => { const s = Quiz.getState(); return s.current[s.rules.asks]; }")
         page.locator(f'.choice-button[data-answer="{correct}"]').click()
@@ -149,8 +172,13 @@ with sync_playwright() as p:
     check("results screen still reached",
           page.locator("#screen-results.is-active").count() == 1)
     quiz, coins, bonus, total = results_add_up(page)
-    check("results math: quiz 25 + coins + region bonus 10",
-          quiz == 25 and bonus == 10 and total == quiz + coins + bonus,
+    cfg = page.evaluate("() => CONFIG")
+    expected_quiz = n * cfg["basePoints"]
+    expected_bonus = cfg["regionBonusPerRegion"]     # exactly 1 region picked
+    check(f"results math: quiz {expected_quiz} ({n} x {cfg['basePoints']}) "
+          f"+ coins + region bonus {expected_bonus}",
+          quiz == expected_quiz and bonus == expected_bonus
+          and total == quiz + coins + bonus,
           f"{quiz} + {coins} + {bonus} = {total}")
     page.click("#play-again-button")
     check("Play Again returns to mode select",
@@ -167,7 +195,8 @@ with sync_playwright() as p:
     page2 = browser.new_page(viewport={"width": 1100, "height": 1200})
     page2.on("pageerror", lambda e: errors.append("map-test pageerror: " + str(e)))
     page2.on("console", lambda m: errors.append("map-test console " + m.type
-             + ": " + m.text) if m.type in ("error", "warning") else None)
+             + ": " + m.text)
+             if m.type in ("error", "warning") and not is_noise(m.text) else None)
     page2.goto(GAME.joinpath("map-test.html").as_uri())
     page2.wait_for_timeout(300)
     check("map-test: no FAIL lines",
