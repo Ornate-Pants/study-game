@@ -89,6 +89,10 @@ const Speech = (function () {
   // only way to test this without a voice to listen to.
   let script = [];
 
+  // Timers for the parts of a question said after a pause, so stop()
+  // can call them off.
+  let waiting = [];
+
   /* ==========================================================
      PICKING A VOICE
 
@@ -204,9 +208,21 @@ const Speech = (function () {
         // The reader refusing is worth knowing about once: it is how we
         // find out this computer has no voice. It is not worth knowing
         // about twice, so nothing is logged after the first time.
+        //
+        // NOT EVERY "ERROR" IS A REFUSAL. The reader also reports an
+        // error when stop() cuts a word off ("interrupted") or throws
+        // away one still waiting its turn ("canceled"). stop() runs
+        // before every question and every "Say it again", so treating
+        // those as refusals told a computer WITH a voice that it had
+        // none. They are ignored.
+        //
+        // "not-allowed" means the browser wanted a click first. That
+        // can come right later, so it is not a permanent refusal.
         line.onerror = function (event) {
-          hardRefusal = true;
-          giveUp((event && event.error) || "no reason given");
+          const why = (event && event.error) || "no reason given";
+          if (why === "interrupted" || why === "canceled") return;
+          if (why !== "not-allowed") hardRefusal = true;
+          giveUp(why);
         };
 
         engine.speak(line);
@@ -217,7 +233,7 @@ const Speech = (function () {
     };
 
     if (delaySeconds > 0) {
-      setTimeout(go, delaySeconds * 1000);
+      waiting.push(setTimeout(go, delaySeconds * 1000));
     } else {
       go();
     }
@@ -226,7 +242,13 @@ const Speech = (function () {
   // Stop whatever is being said. Called before every new word, so that
   // pressing "Say it again" five times says it once more rather than
   // queueing five copies up behind each other.
+  //
+  // It also forgets the parts of the last question still waiting to be
+  // said (the sentence, the word again). Without that, answering
+  // quickly meant the OLD word was read out during the NEW question.
   function stop() {
+    waiting.forEach(clearTimeout);
+    waiting = [];
     if (!engine) return;
     try {
       engine.cancel();

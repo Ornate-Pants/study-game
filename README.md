@@ -22,7 +22,7 @@ Double-click **`state-quest/index.html`**. That is the whole installation.
 No server, no build step, no internet. It runs straight from the folder, which is the
 constraint that shapes most of the design decisions in the spec.
 
-## The Spelling List game (v3.0)
+## The Spelling List game (v3.1)
 
 The word is **never shown** — that would be showing the spelling, which is the thing being
 asked for. It is spoken, using the voice already installed on the computer. Nothing is

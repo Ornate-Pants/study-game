@@ -12,7 +12,7 @@
 
 const CONFIG = {
 
-  APP_VERSION: "3.0",        // Which build of the game this is. It is written down
+  APP_VERSION: "3.1",        // Which build of the game this is. It is written down
                              // HERE and nowhere else - the title screen reads it
                              // from this line, so bumping it here bumps it there.
 
