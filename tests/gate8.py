@@ -240,7 +240,7 @@ with sync_playwright() as p:
     check("the title screen shows the version",
           page.locator("#version-tag").inner_text() == "v" + cfg["APP_VERSION"],
           page.locator("#version-tag").inner_text())
-    check("the version is 3.0", cfg["APP_VERSION"] == "3.0", cfg["APP_VERSION"])
+    check("the version is 3.1", cfg["APP_VERSION"] == "3.1", cfg["APP_VERSION"])
     check("examBonusMultiplier is here now, and it is 2",
           cfg.get("examBonusMultiplier") == 2,
           str(cfg.get("examBonusMultiplier")))
