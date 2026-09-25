@@ -44,6 +44,8 @@ TEST_LISTS = """[
             { word: "friend",  sentence: "" }] },
   { id: "caps",  name: "Capital Words", capsEnforced: true,
     words: [{ word: "Monday", sentence: "" }] },
+  { id: "mixedcaps", name: "Mixed Capital Words", capsEnforced: true,
+    words: [{ word: "school", sentence: "" }] },
   { id: "nocaps", name: "Capitals Off", capsEnforced: false,
     words: [{ word: "Monday", sentence: "" }] },
   { id: "sound", name: "Sound-alikes", capsEnforced: false,
@@ -343,6 +345,35 @@ with sync_playwright() as p:
     check("the review shows the right spelling for the one that was missed",
           "because" in page.evaluate("() => document.getElementById('review-list').innerText")
           or "friend" in page.evaluate("() => document.getElementById('review-list').innerText"))
+
+    # An exam must never be a harsher grader than practice. "school"
+    # carries no capital of its own, even in a list where capitals ARE
+    # enforced overall (unlike "Monday" in the same kind of list) - so
+    # typing it with an unneeded capital is not a mistake in practice,
+    # and must not become one just because the round is an exam.
+    open_game(page)
+    plant(page)
+    open_game(page, debug=False)
+    page.click('.game-button[data-game="spelling"]')
+    page.wait_for_timeout(150)
+    page.locator("#mode-list button").nth(0).click()
+    page.wait_for_timeout(150)
+    page.check('#region-list input[value="mixedcaps"]')
+    page.locator("#exam-toggle").check()
+    page.wait_for_timeout(200)
+    page.click("#start-quiz-button")
+    page.wait_for_timeout(400)
+
+    page.fill("#exam-input", "School")
+    page.click("#exam-submit")
+    page.wait_for_timeout(400)
+
+    review2 = page.evaluate(
+        "() => [...document.querySelectorAll('.review-row')].map(r => r.className)")
+    check("an unneeded capital is accepted in an exam, same as practice",
+          len(review2) == 1 and "is-right" in review2[0]
+          and "is-wrong" not in review2[0],
+          str(review2))
 
     # ================= high scores stay apart =================
     open_game(page)

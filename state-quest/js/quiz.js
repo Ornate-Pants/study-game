@@ -1026,17 +1026,24 @@ const Quiz = (function () {
         // line is the same standard, not a harsher one.
         right = state.answers.indexOf(given) !== -1;
 
-        // Same letters, different capitals. On a word list with
-        // capitals switched off, practice would have ACCEPTED this, so
-        // an exam has to accept it too - the two must never mark the
-        // same answer differently.
-        const sameLetters = state.answers.some(function (candidate) {
+        // Same letters, different capitals. Practice only ever demands
+        // a capital where the correct spelling really has one sitting
+        // at that position (mustBeCapital) - a word with no capitals
+        // of its own, like "school", never punishes an extra one. An
+        // exam has to hold the same line, not a harsher one, so it
+        // re-checks case position by position instead of asking only
+        // whether the whole list has capitals switched off.
+        const sameLettersCandidate = state.answers.filter(function (candidate) {
           return candidate.toLowerCase() === given.toLowerCase();
-        });
+        })[0];
+        const sameLetters = !!sameLettersCandidate;
 
-        if (!right && sameLetters
-            && game.capsOptional && game.capsOptional(state.current)) {
-          right = true;
+        if (!right && sameLettersCandidate) {
+          const capsOk = !sameLettersCandidate.split("").some(function (wanted, position) {
+            return wanted !== given.charAt(position)
+              && mustBeCapital(state.answers, position, wanted);
+          });
+          if (capsOk) right = true;
         }
 
         // Right letters, wrong capitals, where capitals DO matter.
