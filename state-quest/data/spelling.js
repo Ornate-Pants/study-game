@@ -87,18 +87,18 @@ const SPELLING_DATA = {
       name: "2nd Grade Spelling Words Sept 28-Oct 2",
       capsEnforced: false,
       words: [
-        { word: "show",  sentence: "I like show and tell." },
-        { word: "now",  sentence: "Come here now." },
-        { word: "work", sentence: "Parents go to work." },
-        { word: "first",     sentence: "First things first." },
+        { word: "show",    sentence: "I like show and tell." },
+        { word: "now",     sentence: "What is the time right now?" },
+        { word: "work",    sentence: "Parents go to work." },
+        { word: "first",   sentence: "First things first." },
         { word: "down",    sentence: "I come from a land Down under." },
         { word: "many",    sentence: "The octopus has many arms." },
         { word: "about",   sentence: "She knew about snakes." },
-        { word: "over",    sentence: "Truckers say over and out." },
+        { word: "over",    sentence: "A bridge goes over water." },
         { word: "only",    sentence: "I only like cereal for breakfast." },
-        { word: "before",    sentence: "Before school I brush my teeth." },
+        { word: "before",  sentence: "Before school I brush my teeth." },
         { word: "could",   sentence: "She could do a cartwheel." },
-        { word: "would",    sentence: "He would win the game." }
+        { word: "would",   sentence: "Would you like honey in your tea?" }
       ]
     },
     {
