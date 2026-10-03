@@ -102,6 +102,25 @@ const SPELLING_DATA = {
       ]
     },
     {
+      id: "oct5-9",
+      name: "2nd Grade Spelling Words Oct 5-9",
+      capsEnforced: false,
+      words: [
+        { word: "mess",     sentence: "" },
+        { word: "class",    sentence: "" },
+        { word: "buzz",     sentence: "" },
+        { word: "quiz",     sentence: "" },
+        { word: "was",      sentence: "" },
+        { word: "does",     sentence: "" },
+        { word: "doesn't",  sentence: "" },
+        { word: "close",    sentence: "Please close the door." },
+        { word: "goes",     sentence: "" },
+        { word: "easy",     sentence: "" },
+        { word: "busy",     sentence: "" },
+        { word: "because",  sentence: "" }
+      ]
+    },
+    {
       id: "capitals",
       name: "Words That Need a Capital",
       capsEnforced: true,
